@@ -219,6 +219,28 @@ python -m scripts.run_daily_pipeline --symbols-file data/processed/universe_symb
 python -m scripts.run_daily_pipeline --symbols-file data/processed/universe_symbols.txt --end-date 20260508 --fallback-start-date 20240101 --limit 10 --skip-sync
 ```
 
+## 尾盘分钟线确认
+
+先同步目标日期分钟线：
+
+```powershell
+python -m scripts.sync_history --symbols 000001.SZ --period minute --start-date 20260508 --end-date 20260508
+```
+
+再生成尾盘确认：
+
+```powershell
+python -m scripts.build_tail_confirmation --symbols 000001.SZ --date 20260508
+```
+
+默认输出：
+
+```text
+data/processed/tail_confirmation.parquet
+```
+
+尾盘确认会计算 `14:30-15:00`、`14:45-15:00` 涨幅，以及尾盘成交量占全天比例，并按 `config/strategy.yaml` 中的 `intraday` 阈值给出 `tail_confirmed` 和失败原因。
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -237,6 +259,7 @@ python -m scripts.run_daily_pipeline --symbols-file data/processed/universe_symb
 - `scripts/build_candidate_diagnostics.py`：生成候选筛选诊断和落选原因汇总。
 - `scripts/build_daily_report.py`：生成 Markdown 和 CSV 每日报告。
 - `scripts/run_daily_pipeline.py`：一键执行日常数据、特征、候选、诊断和报告流水线。
+- `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
 
 ## 下一阶段建议
 
