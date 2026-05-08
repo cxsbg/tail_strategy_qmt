@@ -17,3 +17,11 @@ def load_symbols(path: str | Path) -> list[str]:
         if cleaned:
             symbols.append(cleaned)
     return symbols
+
+
+def limit_symbols(symbols: list[str], limit: int | None) -> list[str]:
+    if limit is None:
+        return symbols
+    if limit < 1:
+        raise ValueError("Symbol limit must be >= 1.")
+    return symbols[:limit]

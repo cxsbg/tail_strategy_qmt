@@ -27,6 +27,7 @@ class XtQuantAdapter:
             period=request.period,
             start_time=request.start_date,
             end_time=request.end_date,
+            count=request.count,
             dividend_type=request.adjust_type,
         )
 
@@ -38,3 +39,9 @@ class XtQuantAdapter:
             end_time=request.end_date,
             incrementally=True,
         )
+
+    def download_sector_data(self) -> None:
+        self._xtdata.download_sector_data()
+
+    def list_sector_symbols(self, sector_name: str) -> list[str]:
+        return list(self._xtdata.get_stock_list_in_sector(sector_name))

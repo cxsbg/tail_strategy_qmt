@@ -7,6 +7,7 @@ from scripts._bootstrap import ensure_src_path
 
 ensure_src_path()
 
+from data_layer.dates import today_yyyymmdd
 from data_layer.periods import resolve_period
 from data_layer.symbols import limit_symbols, load_symbols, parse_symbols
 from data_layer.sync import MarketDataSynchronizer
@@ -21,16 +22,19 @@ logger = get_logger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Sync QMT history into local Parquet cache.")
+    parser = argparse.ArgumentParser(description="Incrementally sync QMT history into Parquet cache.")
     symbol_group = parser.add_mutually_exclusive_group(required=True)
     symbol_group.add_argument("--symbols", help="Comma separated symbols, for example 000001.SZ,600000.SH")
     symbol_group.add_argument("--symbols-file", help="Text file with one symbol per line.")
     parser.add_argument("--period", choices=["daily", "minute"], default="daily")
-    parser.add_argument("--start-date", required=True, help="Start date, for example 20240101.")
-    parser.add_argument("--end-date", required=True, help="End date, for example 20240501.")
+    parser.add_argument("--end-date", default=today_yyyymmdd(), help="End date/time. Default: today.")
+    parser.add_argument(
+        "--fallback-start-date",
+        required=True,
+        help="Start date/time for symbols without local cache, for example 20240101.",
+    )
     parser.add_argument("--config", default="config/data_source.yaml")
     parser.add_argument("--limit", type=int, help="Only sync the first N symbols.")
-    parser.add_argument("--replace", action="store_true", help="Replace cache instead of appending.")
     return parser
 
 
@@ -55,19 +59,24 @@ def main() -> None:
         parquet_storage=ParquetStorage(storage_config["parquet_root"]),
         sqlite_store=sqlite_store,
     )
-    results = synchronizer.sync_history(
+    results = synchronizer.sync_incremental(
         symbols=symbols,
         period=period.qmt_period,
         storage_period=period.storage_period,
-        start_date=args.start_date,
         end_date=args.end_date,
+        fallback_start_date=args.fallback_start_date,
         adjust_type=qmt_config.get("adjust_type", "front"),
-        append=not args.replace,
     )
 
     success_count = sum(result.status == "success" for result in results)
-    failed_count = len(results) - success_count
-    logger.info("History sync finished: success=%s failed=%s", success_count, failed_count)
+    skipped_count = sum(result.status == "skipped" for result in results)
+    failed_count = len(results) - success_count - skipped_count
+    logger.info(
+        "Incremental sync finished: success=%s skipped=%s failed=%s",
+        success_count,
+        skipped_count,
+        failed_count,
+    )
     if failed_count:
         raise SystemExit(1)
 

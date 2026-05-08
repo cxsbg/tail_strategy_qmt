@@ -49,3 +49,25 @@ def test_normalize_qmt_dict_payload() -> None:
 
     assert normalized.loc[0, "datetime"] == "20240102143000"
     assert normalized.loc[0, "volume"] == 100
+
+
+def test_normalize_qmt_daily_uses_trade_date_index_before_epoch_time() -> None:
+    pd = pytest.importorskip("pandas")
+    raw = pd.DataFrame(
+        [
+            {
+                "time": 1704124800000,
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+                "volume": 100,
+                "amount": 1000,
+            }
+        ],
+        index=["20240102"],
+    )
+
+    normalized = normalize_market_data(raw, symbol="000001.SZ", storage_period="daily")
+
+    assert normalized.loc[0, "date"] == "20240102"

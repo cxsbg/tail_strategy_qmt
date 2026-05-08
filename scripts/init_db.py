@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts._bootstrap import ensure_src_path
+
+ensure_src_path()
+
 from storage.sqlite import SQLiteStore
 from utils.config import load_config_file
 from utils.logging import configure_logging, get_logger

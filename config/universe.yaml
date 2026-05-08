@@ -1,14 +1,16 @@
+source:
+  provider: qmt
+  sector_name: "\u6caa\u6df1A\u80a1"
+  output_path: "data/processed/universe_symbols.txt"
+
 markets:
-  - "SH"
-  - "SZ"
-
-exclude_prefixes:
-  - "688"
-  - "8"
-  - "4"
-
-exclude_boards:
-  - "B股"
+  include_suffixes:
+    - "SH"
+    - "SZ"
+  exclude_prefixes:
+    - "688"
+    - "8"
+    - "4"
 
 indexes:
   benchmark: "000300.SH"

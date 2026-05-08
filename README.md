@@ -93,6 +93,86 @@ python -m scripts.sync_history --symbols 000001.SZ --period minute --start-date 
 
 默认会把新数据与已有 Parquet 缓存合并并按 `symbol + date/datetime` 去重；如需覆盖缓存，追加 `--replace`。
 
+## 每日增量更新
+
+已有缓存后，使用增量同步脚本。脚本会读取每只股票本地 Parquet 的最大日期，自动从下一天开始补齐；已经更新到目标日期的股票会跳过。
+
+```powershell
+conda activate stock
+python -m scripts.sync_incremental --symbols 000001.SZ,600000.SH --period daily --end-date 20260508 --fallback-start-date 20240101
+```
+
+`--fallback-start-date` 只用于没有本地缓存的股票。
+
+## 股票池文件
+
+从 QMT 本地板块数据生成股票池文件：
+
+```powershell
+conda activate stock
+python -m scripts.build_universe
+```
+
+默认读取 `config/universe.yaml`，使用 QMT 的 `沪深A股` 板块，输出到：
+
+```text
+data/processed/universe_symbols.txt
+```
+
+如需先刷新 QMT 板块分类信息，可以追加 `--refresh-sector-data`。这个动作可能较慢，日常不必每次执行。
+
+之后可以用股票池文件做批量增量同步：
+
+```powershell
+python -m scripts.sync_incremental --symbols-file data/processed/universe_symbols.txt --period daily --end-date 20260508 --fallback-start-date 20240101
+```
+
+初次验证建议先限制数量：
+
+```powershell
+python -m scripts.sync_incremental --symbols-file data/processed/universe_symbols.txt --period daily --end-date 20260508 --fallback-start-date 20240101 --limit 10
+```
+
+## 日线特征
+
+从本地日线 Parquet 缓存生成基础特征：
+
+```powershell
+conda activate stock
+python -m scripts.build_daily_features --symbols-file data/processed/universe_symbols.txt --limit 10
+```
+
+默认输出：
+
+```text
+data/processed/daily_features.parquet
+```
+
+当前特征包括 `ma5/ma10/ma20`、`return_5d/return_20d`、`avg_amount_20d`、`volume_ratio_5d`、`close_position_20d`、`distance_to_ma20`、`upper_shadow_ratio` 等。
+
+## 规则候选股
+
+从日线特征生成规则版候选股：
+
+```powershell
+conda activate stock
+python -m scripts.build_candidates
+```
+
+默认读取：
+
+```text
+data/processed/daily_features.parquet
+```
+
+默认输出：
+
+```text
+data/processed/candidates.parquet
+```
+
+这一步只做日线基础筛选和评分，不生成买卖建议，不处理持仓，也不使用机器学习。
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -102,7 +182,12 @@ python -m scripts.sync_history --symbols 000001.SZ --period minute --start-date 
 - `src/qmt/client.py`：QMT 数据客户端协议。
 - `src/qmt/xtquant_adapter.py`：xtquant 适配器，延迟导入，避免污染非 QMT 环境。
 - `src/data_layer/sync.py`：历史数据同步编排骨架。
+- `src/data_layer/universe.py`：股票池构建与基础代码过滤。
+- `scripts/build_universe.py`：从 QMT 板块生成本地股票池文件。
 - `scripts/sync_history.py`：QMT 历史行情同步入口。
+- `scripts/sync_incremental.py`：基于本地缓存最大日期的增量同步入口。
+- `scripts/build_daily_features.py`：从日线缓存生成基础特征。
+- `scripts/build_candidates.py`：从日线特征生成规则版候选列表。
 
 ## 下一阶段建议
 

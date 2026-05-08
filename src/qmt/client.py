@@ -11,6 +11,7 @@ class HistoryRequest:
     start_date: str
     end_date: str
     adjust_type: str = "front"
+    count: int = 1_000_000
 
 
 class QmtClient(Protocol):
@@ -19,3 +20,9 @@ class QmtClient(Protocol):
 
     def download_history(self, request: HistoryRequest) -> None:
         """Ask QMT to download or refresh local history for one symbol."""
+
+    def download_sector_data(self) -> None:
+        """Refresh QMT sector metadata."""
+
+    def list_sector_symbols(self, sector_name: str) -> list[str]:
+        """Return symbols in a QMT sector."""

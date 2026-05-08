@@ -63,8 +63,10 @@ def _ensure_time_columns(frame: object, storage_period: str) -> object:
 
     if storage_period == "daily":
         if "date" not in normalized.columns:
-            if "datetime" in normalized.columns:
-                normalized["date"] = pd.to_datetime(normalized["datetime"]).dt.strftime("%Y%m%d")
+            if _has_meaningful_index(normalized):
+                normalized["date"] = _index_as_time_column(normalized, "%Y%m%d")
+            elif "datetime" in normalized.columns:
+                normalized["date"] = normalized["datetime"].map(_format_daily_date)
             else:
                 normalized["date"] = _index_as_time_column(normalized, "%Y%m%d")
         normalized["date"] = normalized["date"].map(_format_daily_date)
@@ -86,9 +88,15 @@ def _index_as_time_column(frame: object, fmt: str) -> object:
     import pandas as pd
 
     index = frame.index
-    if isinstance(index, pd.RangeIndex):
+    if not _has_meaningful_index(frame):
         raise StorageError("Market data has no date/datetime column or meaningful index.")
     return pd.to_datetime(index).strftime(fmt)
+
+
+def _has_meaningful_index(frame: object) -> bool:
+    import pandas as pd
+
+    return not isinstance(frame.index, pd.RangeIndex)
 
 
 def _format_daily_date(value: object) -> str:
@@ -97,6 +105,8 @@ def _format_daily_date(value: object) -> str:
     text = str(value)
     if text.isdigit() and len(text) == 8:
         return text
+    if text.isdigit() and len(text) == 13:
+        return pd.to_datetime(int(text), unit="ms").strftime("%Y%m%d")
     return pd.to_datetime(value).strftime("%Y%m%d")
 
 
@@ -106,4 +116,6 @@ def _format_minute_datetime(value: object) -> str:
     text = str(value)
     if text.isdigit() and len(text) in {12, 14}:
         return text
+    if text.isdigit() and len(text) == 13:
+        return pd.to_datetime(int(text), unit="ms").strftime("%Y%m%d%H%M%S")
     return pd.to_datetime(value).strftime("%Y%m%d%H%M%S")
