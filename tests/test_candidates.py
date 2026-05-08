@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from strategy.candidates import build_candidates, select_candidates
+from strategy.candidates import (
+    build_candidate_diagnostics,
+    build_candidates,
+    diagnose_candidates,
+    select_candidates,
+    summarize_failure_reasons,
+)
 
 
 def _strategy_config() -> dict[str, object]:
@@ -101,3 +107,54 @@ def test_build_candidates_writes_parquet(tmp_path) -> None:
     assert result.input_count == 2
     assert result.candidate_count == 1
     assert output.loc[0, "symbol"] == "000001.SZ"
+
+
+def test_diagnose_candidates_marks_failures() -> None:
+    diagnostics = diagnose_candidates(
+        _feature_frame(),
+        strategy_config=_strategy_config(),
+        trade_date="20240103",
+    )
+
+    passed = diagnostics.loc[diagnostics["symbol"] == "000001.SZ"].iloc[0]
+    failed = diagnostics.loc[diagnostics["symbol"] == "600000.SH"].iloc[0]
+    assert passed["passed"]
+    assert not failed["passed"]
+    assert "max_return_today" in failed["failed_reasons"]
+
+
+def test_summarize_failure_reasons_counts_each_reason() -> None:
+    diagnostics = diagnose_candidates(
+        _feature_frame(),
+        strategy_config=_strategy_config(),
+        trade_date="20240103",
+    )
+
+    summary = summarize_failure_reasons(diagnostics)
+
+    assert summary.loc[summary["reason"] == "max_return_today", "count"].item() == 1
+
+
+def test_build_candidate_diagnostics_writes_outputs(tmp_path) -> None:
+    pytest.importorskip("pyarrow")
+    pd = pytest.importorskip("pandas")
+    feature_path = tmp_path / "features.parquet"
+    diagnostics_path = tmp_path / "diagnostics.parquet"
+    summary_path = tmp_path / "summary.csv"
+    _feature_frame().to_parquet(feature_path, index=False)
+
+    result = build_candidate_diagnostics(
+        features_path=feature_path,
+        diagnostics_path=diagnostics_path,
+        summary_path=summary_path,
+        strategy_config=_strategy_config(),
+        trade_date="20240103",
+    )
+
+    diagnostics = pd.read_parquet(diagnostics_path)
+    summary = pd.read_csv(summary_path)
+    assert result.input_count == 2
+    assert result.passed_count == 1
+    assert result.failed_count == 1
+    assert len(diagnostics) == 2
+    assert "max_return_today" in set(summary["reason"])

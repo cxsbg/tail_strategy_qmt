@@ -34,6 +34,16 @@ class CandidateBuildResult:
     candidate_count: int
 
 
+@dataclass(frozen=True)
+class CandidateDiagnosticsResult:
+    diagnostics_path: Path
+    summary_path: Path
+    date: str
+    input_count: int
+    passed_count: int
+    failed_count: int
+
+
 def select_candidates(
     features: object,
     *,
@@ -89,6 +99,90 @@ def select_candidates(
     ].reset_index(drop=True)
 
 
+def diagnose_candidates(
+    features: object,
+    *,
+    strategy_config: dict[str, Any],
+    trade_date: str | None = None,
+) -> object:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise StorageError("pandas is required to diagnose strategy candidates.") from exc
+
+    if not isinstance(features, pd.DataFrame):
+        raise StorageError("diagnose_candidates expects a pandas DataFrame.")
+    _validate_features(features)
+
+    date = trade_date or str(features["date"].max())
+    latest = features.loc[features["date"] == date].copy()
+    if latest.empty:
+        return _empty_diagnostics(pd)
+
+    latest["listing_days"] = features.groupby("symbol")["date"].transform("count")
+    latest["failed_reasons_list"] = latest.apply(
+        lambda row: _candidate_reasons(row, strategy_config),
+        axis=1,
+    )
+    latest["passed"] = latest["failed_reasons_list"].map(lambda reasons: len(reasons) == 0)
+    latest["failed_reasons"] = latest["failed_reasons_list"].map(",".join)
+    latest["failed_reason_count"] = latest["failed_reasons_list"].map(len)
+    latest["score"] = latest.apply(
+        lambda row: _score_candidate(row, strategy_config) if row["passed"] else 0.0,
+        axis=1,
+    )
+    return latest[
+        [
+            "symbol",
+            "date",
+            "passed",
+            "score",
+            "failed_reason_count",
+            "failed_reasons",
+            "close",
+            "pct_chg",
+            "ma5",
+            "ma10",
+            "ma20",
+            "return_5d",
+            "return_20d",
+            "avg_amount_20d",
+            "volume_ratio_5d",
+            "close_position_20d",
+            "distance_to_ma20",
+            "upper_shadow_ratio",
+            "listing_days",
+        ]
+    ].sort_values(["passed", "score", "symbol"], ascending=[False, False, True]).reset_index(drop=True)
+
+
+def summarize_failure_reasons(diagnostics: object) -> object:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise StorageError("pandas is required to summarize candidate diagnostics.") from exc
+
+    if not isinstance(diagnostics, pd.DataFrame):
+        raise StorageError("summarize_failure_reasons expects a pandas DataFrame.")
+    if diagnostics.empty:
+        return pd.DataFrame(columns=["reason", "count"])
+
+    failed = diagnostics.loc[~diagnostics["passed"]]
+    reasons: list[str] = []
+    for value in failed["failed_reasons"].fillna(""):
+        reasons.extend(reason for reason in str(value).split(",") if reason)
+    if not reasons:
+        return pd.DataFrame(columns=["reason", "count"])
+    return (
+        pd.Series(reasons)
+        .value_counts()
+        .rename_axis("reason")
+        .reset_index(name="count")
+        .sort_values(["count", "reason"], ascending=[False, True])
+        .reset_index(drop=True)
+    )
+
+
 def build_candidates(
     *,
     features_path: str | Path,
@@ -116,6 +210,46 @@ def build_candidates(
         date=date,
         input_count=int((feature_frame["date"] == date).sum()),
         candidate_count=len(candidates),
+    )
+
+
+def build_candidate_diagnostics(
+    *,
+    features_path: str | Path,
+    diagnostics_path: str | Path,
+    summary_path: str | Path,
+    strategy_config: dict[str, Any],
+    trade_date: str | None = None,
+) -> CandidateDiagnosticsResult:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise StorageError("pandas and pyarrow are required to build candidate diagnostics.") from exc
+
+    feature_frame = pd.read_parquet(features_path)
+    date = trade_date or str(feature_frame["date"].max())
+    diagnostics = diagnose_candidates(
+        feature_frame,
+        strategy_config=strategy_config,
+        trade_date=date,
+    )
+    summary = summarize_failure_reasons(diagnostics)
+
+    diagnostics_output = Path(diagnostics_path)
+    summary_output = Path(summary_path)
+    diagnostics_output.parent.mkdir(parents=True, exist_ok=True)
+    summary_output.parent.mkdir(parents=True, exist_ok=True)
+    diagnostics.to_parquet(diagnostics_output, index=False)
+    summary.to_csv(summary_output, index=False, encoding="utf-8")
+
+    passed_count = int(diagnostics["passed"].sum()) if not diagnostics.empty else 0
+    return CandidateDiagnosticsResult(
+        diagnostics_path=diagnostics_output,
+        summary_path=summary_output,
+        date=date,
+        input_count=len(diagnostics),
+        passed_count=passed_count,
+        failed_count=len(diagnostics) - passed_count,
     )
 
 
@@ -233,5 +367,31 @@ def _empty_candidates(pd: object) -> object:
             "distance_to_ma20",
             "upper_shadow_ratio",
             "reasons",
+        ]
+    )
+
+
+def _empty_diagnostics(pd: object) -> object:
+    return pd.DataFrame(
+        columns=[
+            "symbol",
+            "date",
+            "passed",
+            "score",
+            "failed_reason_count",
+            "failed_reasons",
+            "close",
+            "pct_chg",
+            "ma5",
+            "ma10",
+            "ma20",
+            "return_5d",
+            "return_20d",
+            "avg_amount_20d",
+            "volume_ratio_5d",
+            "close_position_20d",
+            "distance_to_ma20",
+            "upper_shadow_ratio",
+            "listing_days",
         ]
     )

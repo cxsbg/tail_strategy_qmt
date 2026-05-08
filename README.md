@@ -173,6 +173,19 @@ data/processed/candidates.parquet
 
 这一步只做日线基础筛选和评分，不生成买卖建议，不处理持仓，也不使用机器学习。
 
+如果候选为空，生成诊断文件查看每只股票的落选原因：
+
+```powershell
+python -m scripts.build_candidate_diagnostics
+```
+
+默认输出：
+
+```text
+data/processed/candidate_diagnostics.parquet
+data/processed/candidate_reason_summary.csv
+```
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -188,6 +201,7 @@ data/processed/candidates.parquet
 - `scripts/sync_incremental.py`：基于本地缓存最大日期的增量同步入口。
 - `scripts/build_daily_features.py`：从日线缓存生成基础特征。
 - `scripts/build_candidates.py`：从日线特征生成规则版候选列表。
+- `scripts/build_candidate_diagnostics.py`：生成候选筛选诊断和落选原因汇总。
 
 ## 下一阶段建议
 
