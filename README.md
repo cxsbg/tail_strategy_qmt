@@ -186,6 +186,24 @@ data/processed/candidate_diagnostics.parquet
 data/processed/candidate_reason_summary.csv
 ```
 
+## 每日报告
+
+生成 Markdown 和 CSV 日报：
+
+```powershell
+conda activate stock
+python -m scripts.build_daily_report
+```
+
+默认输出：
+
+```text
+outputs/daily_report.md
+outputs/daily_report.csv
+```
+
+日报会汇总候选股、落选原因和最近的数据同步状态；即使当天候选为空，也会输出诊断信息。
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -202,6 +220,7 @@ data/processed/candidate_reason_summary.csv
 - `scripts/build_daily_features.py`：从日线缓存生成基础特征。
 - `scripts/build_candidates.py`：从日线特征生成规则版候选列表。
 - `scripts/build_candidate_diagnostics.py`：生成候选筛选诊断和落选原因汇总。
+- `scripts/build_daily_report.py`：生成 Markdown 和 CSV 每日报告。
 
 ## 下一阶段建议
 
