@@ -2,7 +2,7 @@
 
 基于国金 QMT / xtquant 的 A 股尾盘趋势确认策略辅助系统。
 
-当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、每日报告流水线和基础持仓状态机。回测、机器学习、自动交易暂不实现。
+当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、每日报告流水线和基础持仓状态机。回测、机器学习、自动交易暂不实现。
 
 ## 当前边界
 
@@ -245,6 +245,31 @@ data/processed/tail_confirmation.parquet
 
 基础持仓状态机封装在 `src/position/`，当前支持开仓、状态标记、一次加仓、减仓和平仓，并把动作写入 SQLite `positions` / `trades` 表。它只记录和管理策略辅助决策，不会自动下单。
 
+## 信号落库
+
+候选股和尾盘确认都准备好以后，可以生成策略信号并写入 SQLite `signals` 表：
+
+```powershell
+conda activate stock
+python -m scripts.build_signals --date 20260508
+```
+
+默认输入：
+
+```text
+data/processed/candidates.parquet
+data/processed/tail_confirmation.parquet
+```
+
+默认输出：
+
+```text
+data/processed/signals.parquet
+data/database/tail_strategy.db
+```
+
+信号动作当前只有辅助含义：`OPEN` 表示候选股和尾盘确认均通过，`WATCH` 表示继续观察，`SKIP` 表示尾盘确认失败。脚本会覆盖同一日期、同一策略版本的旧信号，重复运行不会产生重复记录。
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -264,10 +289,12 @@ data/processed/tail_confirmation.parquet
 - `scripts/build_daily_report.py`：生成 Markdown 和 CSV 每日报告。
 - `scripts/run_daily_pipeline.py`：一键执行日常数据、特征、候选、诊断和报告流水线。
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
+- `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
+- `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
 - `src/position/models.py`：持仓状态、动作和交易记录模型。
 - `src/position/repository.py`：持仓和交易记录 SQLite 仓储。
 - `src/position/service.py`：基础持仓状态转换服务。
 
 ## 下一阶段建议
 
-下一步建议把候选股、尾盘确认和持仓状态机串成信号落库流程，再开始实现基础风控规则和离线回测。自动交易仍建议最后再接。
+下一步建议在信号基础上实现基础风控决策，把 `signals` 和当前 `positions` 合并成每日操作建议。自动交易仍建议最后再接。
