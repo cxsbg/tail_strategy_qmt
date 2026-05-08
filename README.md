@@ -2,7 +2,7 @@
 
 基于国金 QMT / xtquant 的 A 股尾盘趋势确认策略辅助系统。
 
-当前仓库只落地阶段 0 和阶段 1：项目骨架、配置、SQLite、日志、QMT 数据接口抽象、Parquet 存储接口和基础测试。策略、回测、机器学习、自动交易暂不实现。
+当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、每日报告流水线和基础持仓状态机。回测、机器学习、自动交易暂不实现。
 
 ## 当前边界
 
@@ -241,6 +241,10 @@ data/processed/tail_confirmation.parquet
 
 尾盘确认会计算 `14:30-15:00`、`14:45-15:00` 涨幅，以及尾盘成交量占全天比例，并按 `config/strategy.yaml` 中的 `intraday` 阈值给出 `tail_confirmed` 和失败原因。
 
+## 持仓状态机
+
+基础持仓状态机封装在 `src/position/`，当前支持开仓、状态标记、一次加仓、减仓和平仓，并把动作写入 SQLite `positions` / `trades` 表。它只记录和管理策略辅助决策，不会自动下单。
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -260,7 +264,10 @@ data/processed/tail_confirmation.parquet
 - `scripts/build_daily_report.py`：生成 Markdown 和 CSV 每日报告。
 - `scripts/run_daily_pipeline.py`：一键执行日常数据、特征、候选、诊断和报告流水线。
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
+- `src/position/models.py`：持仓状态、动作和交易记录模型。
+- `src/position/repository.py`：持仓和交易记录 SQLite 仓储。
+- `src/position/service.py`：基础持仓状态转换服务。
 
 ## 下一阶段建议
 
-下一步建议先用 1-2 只股票验证 QMT 数据返回格式，再扩展到股票池批量同步和交易日增量更新。不要在数据管道稳定前引入回测和机器学习。
+下一步建议把候选股、尾盘确认和持仓状态机串成信号落库流程，再开始实现基础风控规则和离线回测。自动交易仍建议最后再接。
