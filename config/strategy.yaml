@@ -46,6 +46,9 @@ position:
 
 backtest:
   holding_days: 5
+  exit:
+    stop_loss_pct: 0.05
+    take_profit_pct: 0.12
   cost:
     slippage_rate: 0.001
     commission_rate: 0.0003

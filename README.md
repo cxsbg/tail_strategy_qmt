@@ -323,7 +323,7 @@ outputs/backtest_summary.csv
 outputs/backtest_report.md
 ```
 
-当前回测假设为：决策日之后第一个交易日开盘买入，持有 `config/strategy.yaml` 中 `backtest.holding_days` 指定的交易日数后收盘卖出。回测会按 `backtest.cost` 扣减滑点、佣金和卖出印花税，同时保留 `gross_return` 与 `net_return`。它用于快速评估信号方向，不包含真实撮合、涨跌停无法成交、资金曲线复利和组合再平衡。
+当前回测假设为：决策日之后第一个交易日开盘买入，然后逐日检查 `backtest.exit.stop_loss_pct` 和 `backtest.exit.take_profit_pct`，触发后按阈值价退出；如果未触发，则持有 `backtest.holding_days` 指定的交易日数后收盘卖出。由于日线无法判断同一天高低点先后顺序，如果止损和止盈同日触发，会按更保守的止损处理。回测会按 `backtest.cost` 扣减滑点、佣金和卖出印花税，同时保留 `gross_return` 与 `net_return`。它用于快速评估信号方向，不包含真实撮合、涨跌停无法成交、资金曲线复利和组合再平衡。
 
 ## 阶段 1 已提供的代码
 
@@ -357,4 +357,4 @@ outputs/backtest_report.md
 
 ## 下一阶段建议
 
-下一步建议补充更多交易约束，例如止损止盈、涨跌停无法成交、资金曲线和组合再平衡。自动交易仍建议最后再接。
+下一步建议补充更多交易约束，例如涨跌停无法成交、资金曲线和组合再平衡。自动交易仍建议最后再接。

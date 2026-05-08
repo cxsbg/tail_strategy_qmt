@@ -16,6 +16,7 @@ TRADE_COLUMNS = [
     "exit_date",
     "entry_price",
     "exit_price",
+    "exit_reason",
     "holding_days",
     "position_ratio",
     "score",
@@ -30,6 +31,9 @@ SUMMARY_COLUMNS = [
     "decision_count",
     "trade_count",
     "skipped_count",
+    "stop_loss_count",
+    "take_profit_count",
+    "time_exit_count",
     "win_rate",
     "avg_return",
     "avg_net_return",
@@ -60,6 +64,7 @@ def run_decision_backtest(
     storage: ParquetStorage,
     holding_days: int = 5,
     cost_config: dict[str, Any] | None = None,
+    exit_config: dict[str, Any] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> tuple[object, dict[str, object]]:
@@ -74,6 +79,7 @@ def run_decision_backtest(
     if holding_days <= 0:
         raise StorageError("holding_days must be positive.")
     costs = _normalize_cost_config(cost_config)
+    exits = _normalize_exit_config(exit_config)
 
     frame = decisions.copy()
     if start_date is not None:
@@ -102,6 +108,7 @@ def run_decision_backtest(
             daily_frame=daily_frame,
             holding_days=holding_days,
             cost_config=costs,
+            exit_config=exits,
             pd=pd,
         )
         if trade is None:
@@ -123,6 +130,7 @@ def build_decision_backtest(
     report_output_path: str | Path | None = None,
     holding_days: int = 5,
     cost_config: dict[str, Any] | None = None,
+    exit_config: dict[str, Any] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> BacktestResult:
@@ -137,6 +145,7 @@ def build_decision_backtest(
         storage=ParquetStorage(parquet_root),
         holding_days=holding_days,
         cost_config=cost_config,
+        exit_config=exit_config,
         start_date=start_date,
         end_date=end_date,
     )
@@ -170,6 +179,7 @@ def _simulate_one_decision(
     daily_frame: object,
     holding_days: int,
     cost_config: dict[str, float],
+    exit_config: dict[str, float],
     pd: object,
 ) -> dict[str, object] | None:
     future = daily_frame.loc[daily_frame["date"] > str(decision["decision_date"])].copy()
@@ -178,12 +188,19 @@ def _simulate_one_decision(
 
     entry_index = future.index[0]
     entry_row = daily_frame.loc[entry_index]
-    exit_pos = min(daily_frame.index.get_loc(entry_index) + holding_days - 1, len(daily_frame) - 1)
-    exit_row = daily_frame.iloc[exit_pos]
     entry_price = float(entry_row["open"])
-    exit_price = float(exit_row["close"])
     if entry_price <= 0:
         return None
+
+    entry_pos = daily_frame.index.get_loc(entry_index)
+    max_exit_pos = min(entry_pos + holding_days - 1, len(daily_frame) - 1)
+    exit_row, exit_price, exit_reason = _resolve_exit(
+        daily_frame=daily_frame,
+        entry_pos=entry_pos,
+        max_exit_pos=max_exit_pos,
+        entry_price=entry_price,
+        exit_config=exit_config,
+    )
 
     gross_return = exit_price / entry_price - 1.0
     entry_cost_rate = cost_config["slippage_rate"] + cost_config["commission_rate"]
@@ -203,6 +220,7 @@ def _simulate_one_decision(
         "exit_date": exit_row["date"],
         "entry_price": entry_price,
         "exit_price": exit_price,
+        "exit_reason": exit_reason,
         "holding_days": int(daily_frame.index.get_loc(exit_row.name) - daily_frame.index.get_loc(entry_index) + 1),
         "position_ratio": float(ratio),
         "score": score,
@@ -220,6 +238,9 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
             "decision_count": decision_count,
             "trade_count": 0,
             "skipped_count": skipped_count,
+            "stop_loss_count": 0,
+            "take_profit_count": 0,
+            "time_exit_count": 0,
             "win_rate": 0.0,
             "avg_return": 0.0,
             "avg_net_return": 0.0,
@@ -234,10 +255,14 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
         }
     returns = trades["gross_return"]
     net_returns = trades["net_return"]
+    exit_counts = trades["exit_reason"].value_counts()
     return {
         "decision_count": decision_count,
         "trade_count": len(trades),
         "skipped_count": skipped_count,
+        "stop_loss_count": int(exit_counts.get("stop_loss", 0)),
+        "take_profit_count": int(exit_counts.get("take_profit", 0)),
+        "time_exit_count": int(exit_counts.get("time_exit", 0)),
         "win_rate": float((net_returns > 0).mean()),
         "avg_return": float(returns.mean()),
         "avg_net_return": float(net_returns.mean()),
@@ -263,6 +288,9 @@ def render_backtest_markdown(*, summary: dict[str, object], trades: object) -> s
         f"- Decisions: {int(summary['decision_count'])}",
         f"- Trades: {int(summary['trade_count'])}",
         f"- Skipped: {int(summary['skipped_count'])}",
+        f"- Stop loss exits: {int(summary['stop_loss_count'])}",
+        f"- Take profit exits: {int(summary['take_profit_count'])}",
+        f"- Time exits: {int(summary['time_exit_count'])}",
         f"- Win rate: {_format_pct(summary['win_rate'])}",
         f"- Avg gross return: {_format_pct(summary['avg_return'])}",
         f"- Avg net return: {_format_pct(summary['avg_net_return'])}",
@@ -281,17 +309,18 @@ def render_backtest_markdown(*, summary: dict[str, object], trades: object) -> s
 def _trade_lines(trades: object) -> list[str]:
     if trades.empty:
         return ["No simulated trades."]
-    lines = ["| Symbol | Decision | Entry | Exit | Gross | Net | Weight | Score |"]
-    lines.append("|---|---|---|---|---:|---:|---:|---:|")
+    lines = ["| Symbol | Decision | Entry | Exit | Reason | Gross | Net | Weight | Score |"]
+    lines.append("|---|---|---|---|---|---:|---:|---:|---:|")
     for _, row in trades.head(50).iterrows():
         lines.append(
-            "| {symbol} | {decision_date} | {entry_date} @ {entry_price:.3f} | {exit_date} @ {exit_price:.3f} | {gross} | {net} | {weight:.4f} | {score} |".format(
+            "| {symbol} | {decision_date} | {entry_date} @ {entry_price:.3f} | {exit_date} @ {exit_price:.3f} | {reason} | {gross} | {net} | {weight:.4f} | {score} |".format(
                 symbol=row["symbol"],
                 decision_date=row["decision_date"],
                 entry_date=row["entry_date"],
                 entry_price=float(row["entry_price"]),
                 exit_date=row["exit_date"],
                 exit_price=float(row["exit_price"]),
+                reason=row.get("exit_reason", ""),
                 gross=_format_pct(row["gross_return"]),
                 net=_format_pct(row["net_return"]),
                 weight=float(row["position_ratio"]),
@@ -308,6 +337,38 @@ def _normalize_cost_config(cost_config: dict[str, Any] | None) -> dict[str, floa
         "commission_rate": max(0.0, float(config.get("commission_rate", 0.0))),
         "stamp_tax_rate": max(0.0, float(config.get("stamp_tax_rate", 0.0))),
     }
+
+
+def _normalize_exit_config(exit_config: dict[str, Any] | None) -> dict[str, float]:
+    config = exit_config or {}
+    return {
+        "stop_loss_pct": max(0.0, float(config.get("stop_loss_pct", 0.0))),
+        "take_profit_pct": max(0.0, float(config.get("take_profit_pct", 0.0))),
+    }
+
+
+def _resolve_exit(
+    *,
+    daily_frame: object,
+    entry_pos: int,
+    max_exit_pos: int,
+    entry_price: float,
+    exit_config: dict[str, float],
+) -> tuple[object, float, str]:
+    stop_loss_pct = exit_config["stop_loss_pct"]
+    take_profit_pct = exit_config["take_profit_pct"]
+    stop_price = entry_price * (1.0 - stop_loss_pct) if stop_loss_pct > 0 else None
+    take_profit_price = entry_price * (1.0 + take_profit_pct) if take_profit_pct > 0 else None
+
+    for position in range(entry_pos, max_exit_pos + 1):
+        row = daily_frame.iloc[position]
+        if stop_price is not None and float(row["low"]) <= stop_price:
+            return row, stop_price, "stop_loss"
+        if take_profit_price is not None and float(row["high"]) >= take_profit_price:
+            return row, take_profit_price, "take_profit"
+
+    exit_row = daily_frame.iloc[max_exit_pos]
+    return exit_row, float(exit_row["close"]), "time_exit"
 
 
 def _format_pct(value: object) -> str:
@@ -332,7 +393,7 @@ def _load_daily_frame(storage: ParquetStorage, symbol: str, pd: object) -> objec
     frame = storage.read_frame("daily", symbol)
     if not isinstance(frame, pd.DataFrame):
         raise StorageError("Daily cache must be a pandas DataFrame.")
-    missing = {"symbol", "date", "open", "close"} - set(frame.columns)
+    missing = {"symbol", "date", "open", "high", "low", "close"} - set(frame.columns)
     if missing:
         raise StorageError(f"Daily frame missing required columns: {', '.join(sorted(missing))}")
     return frame.sort_values("date").reset_index(drop=True)
