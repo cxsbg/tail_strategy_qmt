@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,10 @@ TRADE_COLUMNS = [
     "position_ratio",
     "score",
     "gross_return",
+    "net_return",
     "weighted_return",
+    "weighted_net_return",
+    "cost_rate",
 ]
 
 SUMMARY_COLUMNS = [
@@ -28,10 +32,15 @@ SUMMARY_COLUMNS = [
     "skipped_count",
     "win_rate",
     "avg_return",
+    "avg_net_return",
     "median_return",
+    "median_net_return",
     "total_weighted_return",
+    "total_weighted_net_return",
     "best_return",
     "worst_return",
+    "best_net_return",
+    "worst_net_return",
 ]
 
 
@@ -39,6 +48,7 @@ SUMMARY_COLUMNS = [
 class BacktestResult:
     trades_path: Path
     summary_path: Path
+    report_path: Path | None
     decision_count: int
     trade_count: int
     skipped_count: int
@@ -49,6 +59,7 @@ def run_decision_backtest(
     *,
     storage: ParquetStorage,
     holding_days: int = 5,
+    cost_config: dict[str, Any] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> tuple[object, dict[str, object]]:
@@ -62,6 +73,7 @@ def run_decision_backtest(
     _validate_decisions(decisions)
     if holding_days <= 0:
         raise StorageError("holding_days must be positive.")
+    costs = _normalize_cost_config(cost_config)
 
     frame = decisions.copy()
     if start_date is not None:
@@ -89,6 +101,7 @@ def run_decision_backtest(
             decision,
             daily_frame=daily_frame,
             holding_days=holding_days,
+            cost_config=costs,
             pd=pd,
         )
         if trade is None:
@@ -107,7 +120,9 @@ def build_decision_backtest(
     parquet_root: str | Path,
     trades_output_path: str | Path,
     summary_output_path: str | Path,
+    report_output_path: str | Path | None = None,
     holding_days: int = 5,
+    cost_config: dict[str, Any] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> BacktestResult:
@@ -121,6 +136,7 @@ def build_decision_backtest(
         decisions,
         storage=ParquetStorage(parquet_root),
         holding_days=holding_days,
+        cost_config=cost_config,
         start_date=start_date,
         end_date=end_date,
     )
@@ -131,9 +147,17 @@ def build_decision_backtest(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     trades.to_parquet(trades_path, index=False)
     pd.DataFrame([summary], columns=SUMMARY_COLUMNS).to_csv(summary_path, index=False, encoding="utf-8")
+    report_path = Path(report_output_path) if report_output_path is not None else None
+    if report_path is not None:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
+            render_backtest_markdown(summary=summary, trades=trades),
+            encoding="utf-8",
+        )
     return BacktestResult(
         trades_path=trades_path,
         summary_path=summary_path,
+        report_path=report_path,
         decision_count=int(summary["decision_count"]),
         trade_count=int(summary["trade_count"]),
         skipped_count=int(summary["skipped_count"]),
@@ -145,6 +169,7 @@ def _simulate_one_decision(
     *,
     daily_frame: object,
     holding_days: int,
+    cost_config: dict[str, float],
     pd: object,
 ) -> dict[str, object] | None:
     future = daily_frame.loc[daily_frame["date"] > str(decision["decision_date"])].copy()
@@ -161,6 +186,10 @@ def _simulate_one_decision(
         return None
 
     gross_return = exit_price / entry_price - 1.0
+    entry_cost_rate = cost_config["slippage_rate"] + cost_config["commission_rate"]
+    exit_cost_rate = cost_config["slippage_rate"] + cost_config["commission_rate"] + cost_config["stamp_tax_rate"]
+    cost_rate = entry_cost_rate + exit_cost_rate
+    net_return = (exit_price * (1.0 - exit_cost_rate)) / (entry_price * (1.0 + entry_cost_rate)) - 1.0
     ratio = decision.get("suggested_position_ratio", 1.0)
     if pd.isna(ratio):
         ratio = 1.0
@@ -178,7 +207,10 @@ def _simulate_one_decision(
         "position_ratio": float(ratio),
         "score": score,
         "gross_return": gross_return,
+        "net_return": net_return,
         "weighted_return": gross_return * float(ratio),
+        "weighted_net_return": net_return * float(ratio),
+        "cost_rate": cost_rate,
     }
 
 
@@ -190,23 +222,110 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
             "skipped_count": skipped_count,
             "win_rate": 0.0,
             "avg_return": 0.0,
+            "avg_net_return": 0.0,
             "median_return": 0.0,
+            "median_net_return": 0.0,
             "total_weighted_return": 0.0,
+            "total_weighted_net_return": 0.0,
             "best_return": 0.0,
             "worst_return": 0.0,
+            "best_net_return": 0.0,
+            "worst_net_return": 0.0,
         }
     returns = trades["gross_return"]
+    net_returns = trades["net_return"]
     return {
         "decision_count": decision_count,
         "trade_count": len(trades),
         "skipped_count": skipped_count,
-        "win_rate": float((returns > 0).mean()),
+        "win_rate": float((net_returns > 0).mean()),
         "avg_return": float(returns.mean()),
+        "avg_net_return": float(net_returns.mean()),
         "median_return": float(returns.median()),
+        "median_net_return": float(net_returns.median()),
         "total_weighted_return": float(trades["weighted_return"].sum()),
+        "total_weighted_net_return": float(trades["weighted_net_return"].sum()),
         "best_return": float(returns.max()),
         "worst_return": float(returns.min()),
+        "best_net_return": float(net_returns.max()),
+        "worst_net_return": float(net_returns.min()),
     }
+
+
+def render_backtest_markdown(*, summary: dict[str, object], trades: object) -> str:
+    lines: list[str] = [
+        "# Tail Strategy Backtest Report",
+        "",
+        f"Generated at: {datetime.now().isoformat(timespec='seconds')}",
+        "",
+        "## Summary",
+        "",
+        f"- Decisions: {int(summary['decision_count'])}",
+        f"- Trades: {int(summary['trade_count'])}",
+        f"- Skipped: {int(summary['skipped_count'])}",
+        f"- Win rate: {_format_pct(summary['win_rate'])}",
+        f"- Avg gross return: {_format_pct(summary['avg_return'])}",
+        f"- Avg net return: {_format_pct(summary['avg_net_return'])}",
+        f"- Total weighted net return: {_format_pct(summary['total_weighted_net_return'])}",
+        f"- Best net return: {_format_pct(summary['best_net_return'])}",
+        f"- Worst net return: {_format_pct(summary['worst_net_return'])}",
+        "",
+        "## Trades",
+        "",
+    ]
+    lines.extend(_trade_lines(trades))
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _trade_lines(trades: object) -> list[str]:
+    if trades.empty:
+        return ["No simulated trades."]
+    lines = ["| Symbol | Decision | Entry | Exit | Gross | Net | Weight | Score |"]
+    lines.append("|---|---|---|---|---:|---:|---:|---:|")
+    for _, row in trades.head(50).iterrows():
+        lines.append(
+            "| {symbol} | {decision_date} | {entry_date} @ {entry_price:.3f} | {exit_date} @ {exit_price:.3f} | {gross} | {net} | {weight:.4f} | {score} |".format(
+                symbol=row["symbol"],
+                decision_date=row["decision_date"],
+                entry_date=row["entry_date"],
+                entry_price=float(row["entry_price"]),
+                exit_date=row["exit_date"],
+                exit_price=float(row["exit_price"]),
+                gross=_format_pct(row["gross_return"]),
+                net=_format_pct(row["net_return"]),
+                weight=float(row["position_ratio"]),
+                score=_format_number(row.get("score")),
+            )
+        )
+    return lines
+
+
+def _normalize_cost_config(cost_config: dict[str, Any] | None) -> dict[str, float]:
+    config = cost_config or {}
+    return {
+        "slippage_rate": max(0.0, float(config.get("slippage_rate", 0.0))),
+        "commission_rate": max(0.0, float(config.get("commission_rate", 0.0))),
+        "stamp_tax_rate": max(0.0, float(config.get("stamp_tax_rate", 0.0))),
+    }
+
+
+def _format_pct(value: object) -> str:
+    return f"{float(value):.2%}"
+
+
+def _format_number(value: object) -> str:
+    try:
+        import pandas as pd
+
+        if pd.isna(value):
+            return ""
+    except ModuleNotFoundError:
+        if value is None:
+            return ""
+    if value is None:
+        return ""
+    return f"{float(value):.2f}".rstrip("0").rstrip(".")
 
 
 def _load_daily_frame(storage: ParquetStorage, symbol: str, pd: object) -> object:

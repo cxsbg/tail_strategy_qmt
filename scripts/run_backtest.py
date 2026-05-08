@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--decisions", default="data/processed/decisions.parquet")
     parser.add_argument("--trades-output", default="outputs/backtest_trades.parquet")
     parser.add_argument("--summary-output", default="outputs/backtest_summary.csv")
+    parser.add_argument("--report-output", default="outputs/backtest_report.md")
     parser.add_argument("--data-config", default="config/data_source.yaml")
     parser.add_argument("--strategy-config", default="config/strategy.yaml")
     parser.add_argument("--holding-days", type=int, help="Override strategy backtest holding_days.")
@@ -35,23 +36,27 @@ def main() -> None:
     strategy_config = load_config_file(Path(args.strategy_config))
     backtest_config = strategy_config.get("backtest", {})
     holding_days = args.holding_days or int(backtest_config.get("holding_days", 5))
+    cost_config = backtest_config.get("cost", {})
 
     result = build_decision_backtest(
         decisions_path=args.decisions,
         parquet_root=data_config["storage"]["parquet_root"],
         trades_output_path=args.trades_output,
         summary_output_path=args.summary_output,
+        report_output_path=args.report_output,
         holding_days=holding_days,
+        cost_config=cost_config,
         start_date=args.start_date,
         end_date=args.end_date,
     )
     logger.info(
-        "Backtest finished: decisions=%s trades=%s skipped=%s trades_output=%s summary=%s",
+        "Backtest finished: decisions=%s trades=%s skipped=%s trades_output=%s summary=%s report=%s",
         result.decision_count,
         result.trade_count,
         result.skipped_count,
         result.trades_path,
         result.summary_path,
+        result.report_path,
     )
 
 

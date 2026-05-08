@@ -320,9 +320,10 @@ data/parquet/daily/*.parquet
 ```text
 outputs/backtest_trades.parquet
 outputs/backtest_summary.csv
+outputs/backtest_report.md
 ```
 
-当前回测假设为：决策日之后第一个交易日开盘买入，持有 `config/strategy.yaml` 中 `backtest.holding_days` 指定的交易日数后收盘卖出。它用于快速评估信号方向，不包含真实撮合、滑点、涨跌停无法成交、资金曲线复利和组合再平衡。
+当前回测假设为：决策日之后第一个交易日开盘买入，持有 `config/strategy.yaml` 中 `backtest.holding_days` 指定的交易日数后收盘卖出。回测会按 `backtest.cost` 扣减滑点、佣金和卖出印花税，同时保留 `gross_return` 与 `net_return`。它用于快速评估信号方向，不包含真实撮合、涨跌停无法成交、资金曲线复利和组合再平衡。
 
 ## 阶段 1 已提供的代码
 
@@ -356,4 +357,4 @@ outputs/backtest_summary.csv
 
 ## 下一阶段建议
 
-下一步建议补充回测报告和更多交易约束，例如止损止盈、滑点、手续费、涨跌停无法成交。自动交易仍建议最后再接。
+下一步建议补充更多交易约束，例如止损止盈、涨跌停无法成交、资金曲线和组合再平衡。自动交易仍建议最后再接。
