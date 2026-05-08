@@ -1,0 +1,23 @@
+data_source:
+  provider: qmt
+  qmt:
+    enabled: true
+    client_path: ""
+    default_period_daily: "1d"
+    default_period_minute: "1m"
+    adjust_type: "front"
+
+storage:
+  sqlite_path: "data/database/tail_strategy.db"
+  parquet_root: "data/parquet"
+
+history:
+  daily_years: 5
+  minute_years: 2
+  initial_download_batch_size: 200
+  retry_times: 3
+
+incremental:
+  update_after_close_time: "15:10"
+  update_daily: true
+  update_minute: true

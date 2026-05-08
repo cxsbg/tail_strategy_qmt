@@ -1,0 +1,30 @@
+stop_loss:
+  max_loss_pct: -0.05
+  break_ma10: true
+  break_breakout_price: true
+  low_open_threshold: -0.03
+  low_open_recover_minutes: 30
+
+take_profit:
+  first_take_profit_pct: 0.06
+  second_take_profit_pct: 0.10
+  reduce_ratio_first: 0.5
+  exit_on_long_upper_shadow: true
+  exit_on_break_ma5: true
+
+time_stop:
+  no_profit_days: 3
+  no_new_high_days: 7
+
+add_position:
+  enabled: true
+  max_add_count: 1
+  require_break_yesterday_high: true
+  require_above_vwap: true
+  require_sector_strong: true
+  add_ratio: 0.20
+
+risk_control:
+  reduce_when_market_weak: true
+  stop_new_buy_when_index_weak: true
+  reduce_after_consecutive_losses: 3

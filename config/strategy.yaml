@@ -1,0 +1,45 @@
+universe:
+  min_listing_days: 120
+  min_price: 3
+  min_avg_amount_20d: 100000000
+  exclude_st: true
+
+trend:
+  require_price_above_ma20: true
+  require_ma_order: true
+  max_distance_to_ma20: 0.12
+  max_return_5d: 0.20
+  max_return_20d: 0.35
+
+strength:
+  min_return_today: 0.02
+  max_return_today: 0.065
+  min_close_position: 0.75
+  max_upper_shadow_ratio: 0.35
+
+volume:
+  min_volume_ratio_5d: 1.2
+  max_volume_ratio_5d: 2.5
+  min_turnover: 0.03
+  max_turnover: 0.12
+
+breakout:
+  enable_20d_high_close: true
+  enable_5d_platform: true
+
+intraday:
+  tail_start_time: "14:30"
+  tail_confirm_time: "14:45"
+  max_tail_return_1430_1500: 0.03
+  max_tail_return_1445_1500: 0.02
+  max_tail_volume_ratio: 0.35
+
+market:
+  require_index_above_ma20: true
+  max_index_drop_today: -0.015
+
+position:
+  initial_position_ratio: 0.30
+  max_single_stock_ratio: 0.15
+  max_total_positions: 5
+  max_new_positions_per_day: 2

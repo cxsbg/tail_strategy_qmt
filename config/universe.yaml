@@ -1,0 +1,18 @@
+markets:
+  - "SH"
+  - "SZ"
+
+exclude_prefixes:
+  - "688"
+  - "8"
+  - "4"
+
+exclude_boards:
+  - "B股"
+
+indexes:
+  benchmark: "000300.SH"
+  broad_market:
+    - "000001.SH"
+    - "399001.SZ"
+    - "399006.SZ"
