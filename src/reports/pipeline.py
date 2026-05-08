@@ -8,6 +8,7 @@ from data_layer.periods import resolve_period
 from data_layer.sync import MarketDataSynchronizer, SyncResult
 from features.daily import FeatureBuildResult, build_daily_features
 from reports.daily import DailyReportResult, build_daily_report
+from reports.decisions import DecisionReportResult, build_decision_report
 from storage.parquet import ParquetStorage
 from storage.sqlite import SQLiteStore
 from strategy.candidates import (
@@ -16,6 +17,8 @@ from strategy.candidates import (
     build_candidate_diagnostics,
     build_candidates,
 )
+from strategy.decisions import DecisionBuildResult, build_and_store_decisions
+from strategy.signals import SignalBuildResult, build_and_store_signals
 
 
 @dataclass(frozen=True)
@@ -24,8 +27,13 @@ class DailyPipelinePaths:
     candidates: Path = Path("data/processed/candidates.parquet")
     diagnostics: Path = Path("data/processed/candidate_diagnostics.parquet")
     reason_summary: Path = Path("data/processed/candidate_reason_summary.csv")
+    tail_confirmation: Path = Path("data/processed/tail_confirmation.parquet")
+    signals: Path = Path("data/processed/signals.parquet")
+    decisions: Path = Path("data/processed/decisions.parquet")
     markdown_report: Path = Path("outputs/daily_report.md")
     csv_report: Path = Path("outputs/daily_report.csv")
+    decision_markdown_report: Path = Path("outputs/decision_report.md")
+    decision_csv_report: Path = Path("outputs/decision_report.csv")
 
 
 @dataclass(frozen=True)
@@ -34,7 +42,10 @@ class DailyPipelineResult:
     feature_result: FeatureBuildResult
     candidate_result: CandidateBuildResult
     diagnostics_result: CandidateDiagnosticsResult
+    signal_result: SignalBuildResult
+    decision_result: DecisionBuildResult
     report_result: DailyReportResult
+    decision_report_result: DecisionReportResult
 
 
 def run_daily_pipeline(
@@ -95,6 +106,20 @@ def run_daily_pipeline(
         strategy_config=strategy_config,
         trade_date=end_date,
     )
+    signal_result = build_and_store_signals(
+        candidates_path=paths.candidates,
+        tail_confirmation_path=paths.tail_confirmation,
+        output_path=paths.signals,
+        db_path=storage_config["sqlite_path"],
+        strategy_config=strategy_config,
+        trade_date=end_date,
+    )
+    decision_result = build_and_store_decisions(
+        db_path=storage_config["sqlite_path"],
+        strategy_config=strategy_config,
+        decision_date=end_date,
+        output_path=paths.decisions,
+    )
     report_result = build_daily_report(
         candidates_path=paths.candidates,
         diagnostics_path=paths.diagnostics,
@@ -104,10 +129,19 @@ def run_daily_pipeline(
         csv_path=paths.csv_report,
         report_date=end_date,
     )
+    decision_report_result = build_decision_report(
+        decisions_path=paths.decisions,
+        markdown_path=paths.decision_markdown_report,
+        csv_path=paths.decision_csv_report,
+        report_date=end_date,
+    )
     return DailyPipelineResult(
         sync_results=tuple(sync_results),
         feature_result=feature_result,
         candidate_result=candidate_result,
         diagnostics_result=diagnostics_result,
+        signal_result=signal_result,
+        decision_result=decision_result,
         report_result=report_result,
+        decision_report_result=decision_report_result,
     )

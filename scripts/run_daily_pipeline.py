@@ -19,7 +19,9 @@ logger = get_logger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run daily QMT sync, features, candidates, diagnostics, and report.")
+    parser = argparse.ArgumentParser(
+        description="Run daily QMT sync, features, candidates, signals, decisions, and reports."
+    )
     symbol_group = parser.add_mutually_exclusive_group(required=True)
     symbol_group.add_argument("--symbols", help="Comma separated symbols, for example 000001.SZ,600000.SH")
     symbol_group.add_argument("--symbols-file", help="Text file with one symbol per line.")
@@ -37,8 +39,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--candidates", default="data/processed/candidates.parquet")
     parser.add_argument("--diagnostics", default="data/processed/candidate_diagnostics.parquet")
     parser.add_argument("--reason-summary", default="data/processed/candidate_reason_summary.csv")
+    parser.add_argument("--tail-confirmation", default="data/processed/tail_confirmation.parquet")
+    parser.add_argument("--signals", default="data/processed/signals.parquet")
+    parser.add_argument("--decisions", default="data/processed/decisions.parquet")
     parser.add_argument("--markdown-report", default="outputs/daily_report.md")
     parser.add_argument("--csv-report", default="outputs/daily_report.csv")
+    parser.add_argument("--decision-markdown-report", default="outputs/decision_report.md")
+    parser.add_argument("--decision-csv-report", default="outputs/decision_report.csv")
     return parser
 
 
@@ -54,8 +61,13 @@ def main() -> None:
         candidates=Path(args.candidates),
         diagnostics=Path(args.diagnostics),
         reason_summary=Path(args.reason_summary),
+        tail_confirmation=Path(args.tail_confirmation),
+        signals=Path(args.signals),
+        decisions=Path(args.decisions),
         markdown_report=Path(args.markdown_report),
         csv_report=Path(args.csv_report),
+        decision_markdown_report=Path(args.decision_markdown_report),
+        decision_csv_report=Path(args.decision_csv_report),
     )
     result = run_daily_pipeline(
         symbols=symbols,
@@ -71,13 +83,19 @@ def main() -> None:
     skipped_count = sum(item.status == "skipped" for item in result.sync_results)
     failed_count = sum(item.status == "failed" for item in result.sync_results)
     logger.info(
-        "Daily pipeline finished: sync_success=%s sync_skipped=%s sync_failed=%s features=%s candidates=%s report=%s",
+        (
+            "Daily pipeline finished: sync_success=%s sync_skipped=%s sync_failed=%s "
+            "features=%s candidates=%s signals=%s decisions=%s report=%s decision_report=%s"
+        ),
         success_count,
         skipped_count,
         failed_count,
         result.feature_result.row_count,
         result.candidate_result.candidate_count,
+        result.signal_result.signal_count,
+        result.decision_result.decision_count,
         result.report_result.markdown_path,
+        result.decision_report_result.markdown_path,
     )
     if failed_count:
         raise SystemExit(1)

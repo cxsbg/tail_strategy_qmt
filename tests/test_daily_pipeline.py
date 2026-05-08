@@ -16,8 +16,13 @@ def test_run_daily_pipeline_skip_sync_builds_outputs(tmp_path) -> None:
         candidates=tmp_path / "candidates.parquet",
         diagnostics=tmp_path / "diagnostics.parquet",
         reason_summary=tmp_path / "reason_summary.csv",
+        tail_confirmation=tmp_path / "tail_confirmation.parquet",
+        signals=tmp_path / "signals.parquet",
+        decisions=tmp_path / "decisions.parquet",
         markdown_report=tmp_path / "daily_report.md",
         csv_report=tmp_path / "daily_report.csv",
+        decision_markdown_report=tmp_path / "decision_report.md",
+        decision_csv_report=tmp_path / "decision_report.csv",
     )
     storage = ParquetStorage(parquet_root)
     storage.write_frame("daily", "000001.SZ", _daily_frame())
@@ -41,9 +46,15 @@ def test_run_daily_pipeline_skip_sync_builds_outputs(tmp_path) -> None:
 
     assert result.sync_results == ()
     assert result.feature_result.row_count == 25
+    assert result.signal_result.signal_count == 1
+    assert result.decision_result.decision_count == 1
     assert result.report_result.markdown_path.exists()
     assert result.report_result.csv_path.exists()
+    assert result.decision_report_result.markdown_path.exists()
+    assert result.decision_report_result.csv_path.exists()
     assert pd.read_parquet(paths.diagnostics).shape[0] == 1
+    assert pd.read_parquet(paths.signals).shape[0] == 1
+    assert pd.read_parquet(paths.decisions).shape[0] == 1
 
 
 def test_run_daily_pipeline_requires_qmt_client_when_sync_enabled(tmp_path) -> None:
@@ -110,5 +121,11 @@ def _strategy_config() -> dict[str, object]:
         "volume": {
             "min_volume_ratio_5d": 0,
             "max_volume_ratio_5d": 999,
+        },
+        "position": {
+            "initial_position_ratio": 0.3,
+            "max_single_stock_ratio": 0.15,
+            "max_total_positions": 5,
+            "max_new_positions_per_day": 2,
         },
     }

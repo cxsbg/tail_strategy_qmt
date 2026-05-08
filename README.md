@@ -206,7 +206,7 @@ outputs/daily_report.csv
 
 ## 一键日常流水线
 
-每天可以用一个命令串起增量同步、特征、候选、诊断和日报：
+每天可以用一个命令串起增量同步、特征、候选、诊断、信号、风控决策和报告：
 
 ```powershell
 conda activate stock
@@ -218,6 +218,17 @@ python -m scripts.run_daily_pipeline --symbols-file data/processed/universe_symb
 ```powershell
 python -m scripts.run_daily_pipeline --symbols-file data/processed/universe_symbols.txt --end-date 20260508 --fallback-start-date 20240101 --limit 10 --skip-sync
 ```
+
+流水线默认会额外生成：
+
+```text
+data/processed/signals.parquet
+data/processed/decisions.parquet
+outputs/decision_report.md
+outputs/decision_report.csv
+```
+
+如果当天还没有生成 `data/processed/tail_confirmation.parquet`，信号会自动降级为观察，不会直接给 `OPEN_POSITION`。
 
 ## 尾盘分钟线确认
 
@@ -305,12 +316,13 @@ data/database/tail_strategy.db
 - `scripts/build_candidates.py`：从日线特征生成规则版候选列表。
 - `scripts/build_candidate_diagnostics.py`：生成候选筛选诊断和落选原因汇总。
 - `scripts/build_daily_report.py`：生成 Markdown 和 CSV 每日报告。
-- `scripts/run_daily_pipeline.py`：一键执行日常数据、特征、候选、诊断和报告流水线。
+- `scripts/run_daily_pipeline.py`：一键执行日常数据、特征、候选、诊断、信号、决策和报告流水线。
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
 - `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
 - `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
 - `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
+- `src/reports/decisions.py`：生成面向人工查看的操作建议报告。
 - `src/position/models.py`：持仓状态、动作和交易记录模型。
 - `src/position/repository.py`：持仓和交易记录 SQLite 仓储。
 - `src/position/service.py`：基础持仓状态转换服务。
