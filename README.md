@@ -204,6 +204,21 @@ outputs/daily_report.csv
 
 日报会汇总候选股、落选原因和最近的数据同步状态；即使当天候选为空，也会输出诊断信息。
 
+## 一键日常流水线
+
+每天可以用一个命令串起增量同步、特征、候选、诊断和日报：
+
+```powershell
+conda activate stock
+python -m scripts.run_daily_pipeline --symbols-file data/processed/universe_symbols.txt --end-date 20260508 --fallback-start-date 20240101 --limit 10
+```
+
+如果只想用本地缓存离线验证，不连接 QMT：
+
+```powershell
+python -m scripts.run_daily_pipeline --symbols-file data/processed/universe_symbols.txt --end-date 20260508 --fallback-start-date 20240101 --limit 10 --skip-sync
+```
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -221,6 +236,7 @@ outputs/daily_report.csv
 - `scripts/build_candidates.py`：从日线特征生成规则版候选列表。
 - `scripts/build_candidate_diagnostics.py`：生成候选筛选诊断和落选原因汇总。
 - `scripts/build_daily_report.py`：生成 Markdown 和 CSV 每日报告。
+- `scripts/run_daily_pipeline.py`：一键执行日常数据、特征、候选、诊断和报告流水线。
 
 ## 下一阶段建议
 
