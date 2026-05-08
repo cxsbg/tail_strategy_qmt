@@ -2,7 +2,7 @@
 
 基于国金 QMT / xtquant 的 A 股尾盘趋势确认策略辅助系统。
 
-当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线和基础持仓状态机。回测、机器学习、自动交易暂不实现。
+当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线、基础持仓状态机和轻量离线回测。机器学习、自动交易暂不实现。
 
 ## 当前边界
 
@@ -299,6 +299,31 @@ data/database/tail_strategy.db
 
 当前决策动作仍是辅助建议：`OPEN_POSITION`、`HOLD_POSITION`、`WATCH_POSITION`、`REDUCE_POSITION`、`WATCH_SIGNAL`、`SKIP_SIGNAL`。规则会限制总持仓数量和单日新开数量，并避免对已有持仓重复开仓。
 
+## 轻量回测
+
+可以基于 `OPEN_POSITION` 决策和本地日线缓存运行一个基础离线回测：
+
+```powershell
+conda activate stock
+python -m scripts.run_backtest --start-date 20240101 --end-date 20260508
+```
+
+默认读取：
+
+```text
+data/processed/decisions.parquet
+data/parquet/daily/*.parquet
+```
+
+默认输出：
+
+```text
+outputs/backtest_trades.parquet
+outputs/backtest_summary.csv
+```
+
+当前回测假设为：决策日之后第一个交易日开盘买入，持有 `config/strategy.yaml` 中 `backtest.holding_days` 指定的交易日数后收盘卖出。它用于快速评估信号方向，不包含真实撮合、滑点、涨跌停无法成交、资金曲线复利和组合再平衡。
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -320,8 +345,10 @@ data/database/tail_strategy.db
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
 - `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
+- `scripts/run_backtest.py`：基于风控决策和本地日线缓存运行轻量回测。
 - `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
 - `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
+- `src/backtest/simple.py`：轻量决策回测引擎。
 - `src/reports/decisions.py`：生成面向人工查看的操作建议报告。
 - `src/position/models.py`：持仓状态、动作和交易记录模型。
 - `src/position/repository.py`：持仓和交易记录 SQLite 仓储。
@@ -329,4 +356,4 @@ data/database/tail_strategy.db
 
 ## 下一阶段建议
 
-下一步建议把每日流水线扩展为 `signals -> decisions` 全流程，并生成面向人工查看的操作建议报告。自动交易仍建议最后再接。
+下一步建议补充回测报告和更多交易约束，例如止损止盈、滑点、手续费、涨跌停无法成交。自动交易仍建议最后再接。

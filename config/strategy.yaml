@@ -43,3 +43,6 @@ position:
   max_single_stock_ratio: 0.15
   max_total_positions: 5
   max_new_positions_per_day: 2
+
+backtest:
+  holding_days: 5
