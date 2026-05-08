@@ -19,7 +19,7 @@ def test_initialize_creates_expected_tables(tmp_path) -> None:
         ).fetchall()
 
     table_names = {row["name"] for row in rows}
-    assert {"positions", "trades", "signals", "data_sync_status"}.issubset(table_names)
+    assert {"positions", "trades", "signals", "decisions", "data_sync_status"}.issubset(table_names)
 
 
 def test_upsert_sync_status(tmp_path) -> None:

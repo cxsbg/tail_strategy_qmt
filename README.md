@@ -2,7 +2,7 @@
 
 基于国金 QMT / xtquant 的 A 股尾盘趋势确认策略辅助系统。
 
-当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、每日报告流水线和基础持仓状态机。回测、机器学习、自动交易暂不实现。
+当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线和基础持仓状态机。回测、机器学习、自动交易暂不实现。
 
 ## 当前边界
 
@@ -270,6 +270,24 @@ data/database/tail_strategy.db
 
 信号动作当前只有辅助含义：`OPEN` 表示候选股和尾盘确认均通过，`WATCH` 表示继续观察，`SKIP` 表示尾盘确认失败。脚本会覆盖同一日期、同一策略版本的旧信号，重复运行不会产生重复记录。
 
+## 风控决策
+
+信号生成后，可以结合当前持仓生成每日操作建议：
+
+```powershell
+conda activate stock
+python -m scripts.build_decisions --date 20260508
+```
+
+默认读取 SQLite 中的 `signals` 和 `positions`，输出：
+
+```text
+data/processed/decisions.parquet
+data/database/tail_strategy.db
+```
+
+当前决策动作仍是辅助建议：`OPEN_POSITION`、`HOLD_POSITION`、`WATCH_POSITION`、`REDUCE_POSITION`、`WATCH_SIGNAL`、`SKIP_SIGNAL`。规则会限制总持仓数量和单日新开数量，并避免对已有持仓重复开仓。
+
 ## 阶段 1 已提供的代码
 
 - `src/utils/config.py`：配置加载。
@@ -290,11 +308,13 @@ data/database/tail_strategy.db
 - `scripts/run_daily_pipeline.py`：一键执行日常数据、特征、候选、诊断和报告流水线。
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
 - `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
+- `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
 - `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
+- `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
 - `src/position/models.py`：持仓状态、动作和交易记录模型。
 - `src/position/repository.py`：持仓和交易记录 SQLite 仓储。
 - `src/position/service.py`：基础持仓状态转换服务。
 
 ## 下一阶段建议
 
-下一步建议在信号基础上实现基础风控决策，把 `signals` 和当前 `positions` 合并成每日操作建议。自动交易仍建议最后再接。
+下一步建议把每日流水线扩展为 `signals -> decisions` 全流程，并生成面向人工查看的操作建议报告。自动交易仍建议最后再接。

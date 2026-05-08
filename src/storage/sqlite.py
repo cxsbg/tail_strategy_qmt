@@ -62,6 +62,22 @@ SCHEMA: tuple[str, ...] = (
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS decisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT NOT NULL,
+        decision_date TEXT NOT NULL,
+        source_signal_id INTEGER,
+        position_id INTEGER,
+        action TEXT NOT NULL,
+        score REAL,
+        suggested_position_ratio REAL,
+        reasons TEXT,
+        risks TEXT,
+        strategy_version TEXT,
+        created_at TEXT
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS data_sync_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT NOT NULL,
