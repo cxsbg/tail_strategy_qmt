@@ -17,6 +17,8 @@ TRADE_COLUMNS = [
     "entry_price",
     "exit_price",
     "exit_reason",
+    "entry_blocked",
+    "exit_deferred_days",
     "holding_days",
     "position_ratio",
     "score",
@@ -65,6 +67,7 @@ def run_decision_backtest(
     holding_days: int = 5,
     cost_config: dict[str, Any] | None = None,
     exit_config: dict[str, Any] | None = None,
+    limit_config: dict[str, Any] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> tuple[object, dict[str, object]]:
@@ -80,6 +83,7 @@ def run_decision_backtest(
         raise StorageError("holding_days must be positive.")
     costs = _normalize_cost_config(cost_config)
     exits = _normalize_exit_config(exit_config)
+    limits = _normalize_limit_config(limit_config)
 
     frame = decisions.copy()
     if start_date is not None:
@@ -109,6 +113,7 @@ def run_decision_backtest(
             holding_days=holding_days,
             cost_config=costs,
             exit_config=exits,
+            limit_config=limits,
             pd=pd,
         )
         if trade is None:
@@ -131,6 +136,7 @@ def build_decision_backtest(
     holding_days: int = 5,
     cost_config: dict[str, Any] | None = None,
     exit_config: dict[str, Any] | None = None,
+    limit_config: dict[str, Any] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> BacktestResult:
@@ -146,6 +152,7 @@ def build_decision_backtest(
         holding_days=holding_days,
         cost_config=cost_config,
         exit_config=exit_config,
+        limit_config=limit_config,
         start_date=start_date,
         end_date=end_date,
     )
@@ -180,6 +187,7 @@ def _simulate_one_decision(
     holding_days: int,
     cost_config: dict[str, float],
     exit_config: dict[str, float],
+    limit_config: dict[str, float | bool],
     pd: object,
 ) -> dict[str, object] | None:
     future = daily_frame.loc[daily_frame["date"] > str(decision["decision_date"])].copy()
@@ -188,18 +196,22 @@ def _simulate_one_decision(
 
     entry_index = future.index[0]
     entry_row = daily_frame.loc[entry_index]
+    entry_pos = daily_frame.index.get_loc(entry_index)
+    if _is_limit_up(daily_frame=daily_frame, position=entry_pos, limit_config=limit_config, price_field="open"):
+        return None
+
     entry_price = float(entry_row["open"])
     if entry_price <= 0:
         return None
 
-    entry_pos = daily_frame.index.get_loc(entry_index)
     max_exit_pos = min(entry_pos + holding_days - 1, len(daily_frame) - 1)
-    exit_row, exit_price, exit_reason = _resolve_exit(
+    exit_row, exit_price, exit_reason, exit_deferred_days = _resolve_exit(
         daily_frame=daily_frame,
         entry_pos=entry_pos,
         max_exit_pos=max_exit_pos,
         entry_price=entry_price,
         exit_config=exit_config,
+        limit_config=limit_config,
     )
 
     gross_return = exit_price / entry_price - 1.0
@@ -221,6 +233,8 @@ def _simulate_one_decision(
         "entry_price": entry_price,
         "exit_price": exit_price,
         "exit_reason": exit_reason,
+        "entry_blocked": False,
+        "exit_deferred_days": exit_deferred_days,
         "holding_days": int(daily_frame.index.get_loc(exit_row.name) - daily_frame.index.get_loc(entry_index) + 1),
         "position_ratio": float(ratio),
         "score": score,
@@ -255,14 +269,13 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
         }
     returns = trades["gross_return"]
     net_returns = trades["net_return"]
-    exit_counts = trades["exit_reason"].value_counts()
     return {
         "decision_count": decision_count,
         "trade_count": len(trades),
         "skipped_count": skipped_count,
-        "stop_loss_count": int(exit_counts.get("stop_loss", 0)),
-        "take_profit_count": int(exit_counts.get("take_profit", 0)),
-        "time_exit_count": int(exit_counts.get("time_exit", 0)),
+        "stop_loss_count": _reason_count(trades, "stop_loss"),
+        "take_profit_count": _reason_count(trades, "take_profit"),
+        "time_exit_count": _reason_count(trades, "time_exit"),
         "win_rate": float((net_returns > 0).mean()),
         "avg_return": float(returns.mean()),
         "avg_net_return": float(net_returns.mean()),
@@ -347,6 +360,19 @@ def _normalize_exit_config(exit_config: dict[str, Any] | None) -> dict[str, floa
     }
 
 
+def _normalize_limit_config(limit_config: dict[str, Any] | None) -> dict[str, float | bool]:
+    config = limit_config or {}
+    return {
+        "enabled": bool(config.get("enabled", True)),
+        "limit_up_pct": max(0.0, float(config.get("limit_up_pct", 0.098))),
+        "limit_down_pct": max(0.0, float(config.get("limit_down_pct", 0.098))),
+    }
+
+
+def _reason_count(trades: object, prefix: str) -> int:
+    return int(trades["exit_reason"].fillna("").map(lambda reason: str(reason).startswith(prefix)).sum())
+
+
 def _resolve_exit(
     *,
     daily_frame: object,
@@ -354,7 +380,8 @@ def _resolve_exit(
     max_exit_pos: int,
     entry_price: float,
     exit_config: dict[str, float],
-) -> tuple[object, float, str]:
+    limit_config: dict[str, float | bool],
+) -> tuple[object, float, str, int]:
     stop_loss_pct = exit_config["stop_loss_pct"]
     take_profit_pct = exit_config["take_profit_pct"]
     stop_price = entry_price * (1.0 - stop_loss_pct) if stop_loss_pct > 0 else None
@@ -363,12 +390,93 @@ def _resolve_exit(
     for position in range(entry_pos, max_exit_pos + 1):
         row = daily_frame.iloc[position]
         if stop_price is not None and float(row["low"]) <= stop_price:
-            return row, stop_price, "stop_loss"
+            return _defer_exit_if_limit_down(
+                daily_frame=daily_frame,
+                trigger_pos=position,
+                trigger_price=stop_price,
+                trigger_reason="stop_loss",
+                limit_config=limit_config,
+            )
         if take_profit_price is not None and float(row["high"]) >= take_profit_price:
-            return row, take_profit_price, "take_profit"
+            return row, take_profit_price, "take_profit", 0
 
-    exit_row = daily_frame.iloc[max_exit_pos]
-    return exit_row, float(exit_row["close"]), "time_exit"
+    return _defer_exit_if_limit_down(
+        daily_frame=daily_frame,
+        trigger_pos=max_exit_pos,
+        trigger_price=float(daily_frame.iloc[max_exit_pos]["close"]),
+        trigger_reason="time_exit",
+        limit_config=limit_config,
+    )
+
+
+def _defer_exit_if_limit_down(
+    *,
+    daily_frame: object,
+    trigger_pos: int,
+    trigger_price: float,
+    trigger_reason: str,
+    limit_config: dict[str, float | bool],
+) -> tuple[object, float, str, int]:
+    for position in range(trigger_pos, len(daily_frame)):
+        row = daily_frame.iloc[position]
+        if not _is_limit_down(daily_frame=daily_frame, position=position, limit_config=limit_config):
+            deferred_days = position - trigger_pos
+            reason = trigger_reason if deferred_days == 0 else f"{trigger_reason}_deferred"
+            price = trigger_price if deferred_days == 0 else float(row["close"])
+            return row, price, reason, deferred_days
+
+    row = daily_frame.iloc[-1]
+    return row, float(row["close"]), f"{trigger_reason}_deferred", len(daily_frame) - 1 - trigger_pos
+
+
+def _is_limit_up(
+    *,
+    daily_frame: object,
+    position: int,
+    limit_config: dict[str, float | bool],
+    price_field: str = "close",
+) -> bool:
+    if not bool(limit_config["enabled"]):
+        return False
+    previous_close = _previous_close(daily_frame, position)
+    if previous_close is None or previous_close <= 0:
+        return False
+    return float(daily_frame.iloc[position][price_field]) >= previous_close * (1.0 + float(limit_config["limit_up_pct"]))
+
+
+def _is_limit_down(
+    *,
+    daily_frame: object,
+    position: int,
+    limit_config: dict[str, float | bool],
+) -> bool:
+    if not bool(limit_config["enabled"]):
+        return False
+    previous_close = _previous_close(daily_frame, position)
+    if previous_close is None or previous_close <= 0:
+        return False
+    row = daily_frame.iloc[position]
+    threshold = previous_close * (1.0 - float(limit_config["limit_down_pct"]))
+    return float(row["close"]) <= threshold or float(row["open"]) <= threshold
+
+
+def _previous_close(daily_frame: object, position: int) -> float | None:
+    row = daily_frame.iloc[position]
+    if "pre_close" in daily_frame.columns:
+        try:
+            import pandas as pd
+
+            value = row["pre_close"]
+            if not pd.isna(value):
+                return float(value)
+        except ModuleNotFoundError:
+            value = row["pre_close"]
+            if value is not None:
+                return float(value)
+    if position <= 0:
+        return None
+    return float(daily_frame.iloc[position - 1]["close"])
+
 
 
 def _format_pct(value: object) -> str:

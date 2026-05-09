@@ -49,6 +49,10 @@ backtest:
   exit:
     stop_loss_pct: 0.05
     take_profit_pct: 0.12
+  limit:
+    enabled: true
+    limit_up_pct: 0.098
+    limit_down_pct: 0.098
   cost:
     slippage_rate: 0.001
     commission_rate: 0.0003

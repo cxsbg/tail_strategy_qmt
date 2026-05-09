@@ -38,6 +38,7 @@ def main() -> None:
     holding_days = args.holding_days or int(backtest_config.get("holding_days", 5))
     cost_config = backtest_config.get("cost", {})
     exit_config = backtest_config.get("exit", {})
+    limit_config = backtest_config.get("limit", {})
 
     result = build_decision_backtest(
         decisions_path=args.decisions,
@@ -48,6 +49,7 @@ def main() -> None:
         holding_days=holding_days,
         cost_config=cost_config,
         exit_config=exit_config,
+        limit_config=limit_config,
         start_date=args.start_date,
         end_date=args.end_date,
     )

@@ -104,6 +104,45 @@ def test_run_decision_backtest_exits_on_take_profit(tmp_path) -> None:
     assert summary["stop_loss_count"] == 0
 
 
+def test_run_decision_backtest_skips_entry_when_open_limit_up(tmp_path) -> None:
+    pd = pytest.importorskip("pandas")
+    storage = ParquetStorage(tmp_path / "parquet")
+    storage.write_frame("daily", "000001.SZ", _daily_frame_with_limit_constraints(entry_limit_up=True))
+
+    trades, summary = run_decision_backtest(
+        _open_decisions(pd),
+        storage=storage,
+        holding_days=3,
+        limit_config={"enabled": True, "limit_up_pct": 0.098, "limit_down_pct": 0.098},
+    )
+
+    assert trades.empty
+    assert summary["decision_count"] == 1
+    assert summary["trade_count"] == 0
+    assert summary["skipped_count"] == 1
+
+
+def test_run_decision_backtest_defers_stop_loss_when_limit_down(tmp_path) -> None:
+    pd = pytest.importorskip("pandas")
+    storage = ParquetStorage(tmp_path / "parquet")
+    storage.write_frame("daily", "000001.SZ", _daily_frame_with_limit_constraints(stop_loss_limit_down=True))
+
+    trades, summary = run_decision_backtest(
+        _open_decisions(pd),
+        storage=storage,
+        holding_days=4,
+        exit_config={"stop_loss_pct": 0.05, "take_profit_pct": 0.0},
+        limit_config={"enabled": True, "limit_up_pct": 0.098, "limit_down_pct": 0.098},
+    )
+
+    trade = trades.iloc[0]
+    assert trade["exit_date"] == "20240105"
+    assert trade["exit_price"] == pytest.approx(9.2)
+    assert trade["exit_reason"] == "stop_loss_deferred"
+    assert trade["exit_deferred_days"] == 1
+    assert summary["stop_loss_count"] == 1
+
+
 def test_run_decision_backtest_counts_missing_daily_cache_as_skipped(tmp_path) -> None:
     pd = pytest.importorskip("pandas")
     decisions = pd.DataFrame(
@@ -285,6 +324,55 @@ def _daily_frame_with_exit_hits(*, stop_loss: bool = False, take_profit: bool = 
             "high": 10.8,
             "low": 10.3,
             "close": 10.6,
+            "volume": 1003,
+            "amount": 100_000_003,
+        },
+    ]
+    return pd.DataFrame(rows)
+
+
+def _daily_frame_with_limit_constraints(*, entry_limit_up: bool = False, stop_loss_limit_down: bool = False):
+    pd = pytest.importorskip("pandas")
+    entry_open = 11.0 if entry_limit_up else 10.0
+    exit_close = 8.8 if stop_loss_limit_down else 10.1
+    rows = [
+        {
+            "symbol": "000001.SZ",
+            "date": "20240103",
+            "open": 9.8,
+            "high": 10.0,
+            "low": 9.7,
+            "close": 9.9,
+            "volume": 1000,
+            "amount": 100_000_000,
+        },
+        {
+            "symbol": "000001.SZ",
+            "date": "20240104",
+            "open": entry_open,
+            "high": max(entry_open, 10.2),
+            "low": 8.7 if stop_loss_limit_down else 9.8,
+            "close": exit_close,
+            "volume": 1001,
+            "amount": 100_000_001,
+        },
+        {
+            "symbol": "000001.SZ",
+            "date": "20240105",
+            "open": 9.1,
+            "high": 9.5,
+            "low": 9.0,
+            "close": 9.2,
+            "volume": 1002,
+            "amount": 100_000_002,
+        },
+        {
+            "symbol": "000001.SZ",
+            "date": "20240106",
+            "open": 9.3,
+            "high": 9.6,
+            "low": 9.1,
+            "close": 9.4,
             "volume": 1003,
             "amount": 100_000_003,
         },
