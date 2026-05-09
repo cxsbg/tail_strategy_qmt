@@ -29,6 +29,14 @@ TRADE_COLUMNS = [
     "cost_rate",
 ]
 
+EQUITY_COLUMNS = [
+    "date",
+    "period_return",
+    "equity",
+    "drawdown",
+    "trade_count",
+]
+
 SUMMARY_COLUMNS = [
     "decision_count",
     "trade_count",
@@ -43,6 +51,9 @@ SUMMARY_COLUMNS = [
     "median_net_return",
     "total_weighted_return",
     "total_weighted_net_return",
+    "compounded_return",
+    "final_equity",
+    "max_drawdown",
     "best_return",
     "worst_return",
     "best_net_return",
@@ -54,6 +65,7 @@ SUMMARY_COLUMNS = [
 class BacktestResult:
     trades_path: Path
     summary_path: Path
+    equity_path: Path | None
     report_path: Path | None
     decision_count: int
     trade_count: int
@@ -68,6 +80,7 @@ def run_decision_backtest(
     cost_config: dict[str, Any] | None = None,
     exit_config: dict[str, Any] | None = None,
     limit_config: dict[str, Any] | None = None,
+    initial_equity: float = 1.0,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> tuple[object, dict[str, object]]:
@@ -122,7 +135,14 @@ def run_decision_backtest(
             rows.append(trade)
 
     trades = pd.DataFrame(rows, columns=TRADE_COLUMNS)
-    summary = _summary(decision_count=len(open_decisions), trades=trades, skipped_count=skipped_count)
+    equity_curve = build_equity_curve(trades, initial_equity=initial_equity)
+    summary = _summary(
+        decision_count=len(open_decisions),
+        trades=trades,
+        skipped_count=skipped_count,
+        equity_curve=equity_curve,
+        initial_equity=initial_equity,
+    )
     return trades, summary
 
 
@@ -132,11 +152,13 @@ def build_decision_backtest(
     parquet_root: str | Path,
     trades_output_path: str | Path,
     summary_output_path: str | Path,
+    equity_output_path: str | Path | None = None,
     report_output_path: str | Path | None = None,
     holding_days: int = 5,
     cost_config: dict[str, Any] | None = None,
     exit_config: dict[str, Any] | None = None,
     limit_config: dict[str, Any] | None = None,
+    initial_equity: float = 1.0,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> BacktestResult:
@@ -153,9 +175,11 @@ def build_decision_backtest(
         cost_config=cost_config,
         exit_config=exit_config,
         limit_config=limit_config,
+        initial_equity=initial_equity,
         start_date=start_date,
         end_date=end_date,
     )
+    equity_curve = build_equity_curve(trades, initial_equity=initial_equity)
 
     trades_path = Path(trades_output_path)
     summary_path = Path(summary_output_path)
@@ -163,16 +187,21 @@ def build_decision_backtest(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     trades.to_parquet(trades_path, index=False)
     pd.DataFrame([summary], columns=SUMMARY_COLUMNS).to_csv(summary_path, index=False, encoding="utf-8")
+    equity_path = Path(equity_output_path) if equity_output_path is not None else None
+    if equity_path is not None:
+        equity_path.parent.mkdir(parents=True, exist_ok=True)
+        equity_curve.to_csv(equity_path, index=False, encoding="utf-8")
     report_path = Path(report_output_path) if report_output_path is not None else None
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(
-            render_backtest_markdown(summary=summary, trades=trades),
+            render_backtest_markdown(summary=summary, trades=trades, equity_curve=equity_curve),
             encoding="utf-8",
         )
     return BacktestResult(
         trades_path=trades_path,
         summary_path=summary_path,
+        equity_path=equity_path,
         report_path=report_path,
         decision_count=int(summary["decision_count"]),
         trade_count=int(summary["trade_count"]),
@@ -246,7 +275,42 @@ def _simulate_one_decision(
     }
 
 
-def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict[str, object]:
+def build_equity_curve(trades: object, *, initial_equity: float = 1.0) -> object:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise StorageError("pandas is required to build backtest equity curves.") from exc
+
+    if not isinstance(trades, pd.DataFrame):
+        raise StorageError("build_equity_curve expects trades to be a pandas DataFrame.")
+    if initial_equity <= 0:
+        raise StorageError("initial_equity must be positive.")
+    if trades.empty:
+        return pd.DataFrame(columns=EQUITY_COLUMNS)
+    missing = {"exit_date", "weighted_net_return"} - set(trades.columns)
+    if missing:
+        raise StorageError(f"Trade frame missing required columns: {', '.join(sorted(missing))}")
+
+    grouped = (
+        trades.groupby("exit_date", as_index=False)
+        .agg(period_return=("weighted_net_return", "sum"), trade_count=("symbol", "count"))
+        .rename(columns={"exit_date": "date"})
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+    grouped["equity"] = initial_equity * (1.0 + grouped["period_return"]).cumprod()
+    grouped["drawdown"] = grouped["equity"] / grouped["equity"].cummax() - 1.0
+    return grouped[EQUITY_COLUMNS]
+
+
+def _summary(
+    *,
+    decision_count: int,
+    trades: object,
+    skipped_count: int,
+    equity_curve: object,
+    initial_equity: float,
+) -> dict[str, object]:
     if trades.empty:
         return {
             "decision_count": decision_count,
@@ -262,6 +326,9 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
             "median_net_return": 0.0,
             "total_weighted_return": 0.0,
             "total_weighted_net_return": 0.0,
+            "compounded_return": 0.0,
+            "final_equity": initial_equity,
+            "max_drawdown": 0.0,
             "best_return": 0.0,
             "worst_return": 0.0,
             "best_net_return": 0.0,
@@ -269,6 +336,9 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
         }
     returns = trades["gross_return"]
     net_returns = trades["net_return"]
+    final_equity = float(equity_curve.iloc[-1]["equity"]) if not equity_curve.empty else initial_equity
+    compounded_return = final_equity / initial_equity - 1.0
+    max_drawdown = float(equity_curve["drawdown"].min()) if not equity_curve.empty else 0.0
     return {
         "decision_count": decision_count,
         "trade_count": len(trades),
@@ -283,6 +353,9 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
         "median_net_return": float(net_returns.median()),
         "total_weighted_return": float(trades["weighted_return"].sum()),
         "total_weighted_net_return": float(trades["weighted_net_return"].sum()),
+        "compounded_return": compounded_return,
+        "final_equity": final_equity,
+        "max_drawdown": max_drawdown,
         "best_return": float(returns.max()),
         "worst_return": float(returns.min()),
         "best_net_return": float(net_returns.max()),
@@ -290,7 +363,7 @@ def _summary(*, decision_count: int, trades: object, skipped_count: int) -> dict
     }
 
 
-def render_backtest_markdown(*, summary: dict[str, object], trades: object) -> str:
+def render_backtest_markdown(*, summary: dict[str, object], trades: object, equity_curve: object | None = None) -> str:
     lines: list[str] = [
         "# Tail Strategy Backtest Report",
         "",
@@ -308,15 +381,44 @@ def render_backtest_markdown(*, summary: dict[str, object], trades: object) -> s
         f"- Avg gross return: {_format_pct(summary['avg_return'])}",
         f"- Avg net return: {_format_pct(summary['avg_net_return'])}",
         f"- Total weighted net return: {_format_pct(summary['total_weighted_net_return'])}",
+        f"- Compounded return: {_format_pct(summary['compounded_return'])}",
+        f"- Final equity: {_format_number(summary['final_equity'])}",
+        f"- Max drawdown: {_format_pct(summary['max_drawdown'])}",
         f"- Best net return: {_format_pct(summary['best_net_return'])}",
         f"- Worst net return: {_format_pct(summary['worst_net_return'])}",
         "",
-        "## Trades",
+        "## Equity Curve",
         "",
     ]
+    lines.extend(_equity_lines(equity_curve))
+    lines.extend(
+        [
+            "",
+            "## Trades",
+            "",
+        ]
+    )
     lines.extend(_trade_lines(trades))
     lines.append("")
     return "\n".join(lines)
+
+
+def _equity_lines(equity_curve: object | None) -> list[str]:
+    if equity_curve is None or equity_curve.empty:
+        return ["No equity curve records."]
+    lines = ["| Date | Period Return | Equity | Drawdown | Trades |"]
+    lines.append("|---|---:|---:|---:|---:|")
+    for _, row in equity_curve.tail(20).iterrows():
+        lines.append(
+            "| {date} | {period_return} | {equity} | {drawdown} | {trade_count} |".format(
+                date=row["date"],
+                period_return=_format_pct(row["period_return"]),
+                equity=_format_number(row["equity"]),
+                drawdown=_format_pct(row["drawdown"]),
+                trade_count=int(row["trade_count"]),
+            )
+        )
+    return lines
 
 
 def _trade_lines(trades: object) -> list[str]:

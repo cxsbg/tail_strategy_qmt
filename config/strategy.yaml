@@ -45,6 +45,7 @@ position:
   max_new_positions_per_day: 2
 
 backtest:
+  initial_equity: 1.0
   holding_days: 5
   exit:
     stop_loss_pct: 0.05

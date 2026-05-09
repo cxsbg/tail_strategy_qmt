@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from backtest.simple import build_decision_backtest, render_backtest_markdown, run_decision_backtest
+from backtest.simple import build_decision_backtest, build_equity_curve, render_backtest_markdown, run_decision_backtest
 from storage.parquet import ParquetStorage
 
 
@@ -60,6 +60,9 @@ def test_run_decision_backtest_simulates_open_position_decisions(tmp_path) -> No
     assert summary["time_exit_count"] == 1
     assert summary["win_rate"] == 1.0
     assert summary["avg_net_return"] == pytest.approx(expected_net_return)
+    assert summary["final_equity"] == pytest.approx(1.0 + expected_net_return * 0.15)
+    assert summary["compounded_return"] == pytest.approx(expected_net_return * 0.15)
+    assert summary["max_drawdown"] == pytest.approx(0.0)
 
 
 def test_run_decision_backtest_exits_on_stop_loss(tmp_path) -> None:
@@ -177,6 +180,7 @@ def test_build_decision_backtest_writes_outputs(tmp_path) -> None:
     decisions_path = tmp_path / "decisions.parquet"
     trades_path = tmp_path / "trades.parquet"
     summary_path = tmp_path / "summary.csv"
+    equity_path = tmp_path / "equity.csv"
     report_path = tmp_path / "report.md"
     pd.DataFrame(
         [
@@ -195,6 +199,7 @@ def test_build_decision_backtest_writes_outputs(tmp_path) -> None:
         parquet_root=tmp_path / "parquet",
         trades_output_path=trades_path,
         summary_output_path=summary_path,
+        equity_output_path=equity_path,
         report_output_path=report_path,
         holding_days=3,
     )
@@ -204,8 +209,42 @@ def test_build_decision_backtest_writes_outputs(tmp_path) -> None:
     assert result.skipped_count == 0
     assert trades_path.exists()
     assert summary_path.exists()
+    assert result.equity_path == equity_path
+    assert equity_path.exists()
     assert result.report_path == report_path
     assert "Tail Strategy Backtest Report" in report_path.read_text(encoding="utf-8")
+
+
+def test_build_equity_curve_groups_returns_by_exit_date() -> None:
+    pd = pytest.importorskip("pandas")
+    trades = pd.DataFrame(
+        [
+            {
+                "symbol": "000001.SZ",
+                "exit_date": "20240105",
+                "weighted_net_return": 0.03,
+            },
+            {
+                "symbol": "600000.SH",
+                "exit_date": "20240105",
+                "weighted_net_return": -0.01,
+            },
+            {
+                "symbol": "300001.SZ",
+                "exit_date": "20240108",
+                "weighted_net_return": -0.05,
+            },
+        ]
+    )
+
+    curve = build_equity_curve(trades, initial_equity=1.0)
+
+    assert list(curve["date"]) == ["20240105", "20240108"]
+    assert list(curve["trade_count"]) == [2, 1]
+    assert curve.loc[0, "period_return"] == pytest.approx(0.02)
+    assert curve.loc[0, "equity"] == pytest.approx(1.02)
+    assert curve.loc[1, "equity"] == pytest.approx(1.02 * 0.95)
+    assert curve.loc[1, "drawdown"] == pytest.approx(-0.05)
 
 
 def test_render_backtest_markdown_includes_summary_and_trades() -> None:
@@ -238,14 +277,30 @@ def test_render_backtest_markdown_includes_summary_and_trades() -> None:
         "avg_return": 0.23,
         "avg_net_return": 0.22,
         "total_weighted_net_return": 0.033,
+        "compounded_return": 0.033,
+        "final_equity": 1.033,
+        "max_drawdown": 0.0,
         "best_net_return": 0.22,
         "worst_net_return": 0.22,
     }
 
-    markdown = render_backtest_markdown(summary=summary, trades=trades)
+    equity_curve = build_equity_curve(
+        pd.DataFrame(
+            [
+                {
+                    "symbol": "000001.SZ",
+                    "exit_date": "20240106",
+                    "weighted_net_return": 0.033,
+                }
+            ]
+        )
+    )
+    markdown = render_backtest_markdown(summary=summary, trades=trades, equity_curve=equity_curve)
 
     assert "- Trades: 1" in markdown
     assert "- Time exits: 1" in markdown
+    assert "- Max drawdown: 0.00%" in markdown
+    assert "| 20240106 | 3.30% | 1.03 | 0.00% | 1 |" in markdown
     assert "- Avg net return: 22.00%" in markdown
     assert "| 000001.SZ | 20240103 | 20240104 @ 13.000 | 20240106 @ 16.000 | time_exit |" in markdown
 
