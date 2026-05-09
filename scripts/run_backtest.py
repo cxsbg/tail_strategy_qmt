@@ -41,6 +41,7 @@ def main() -> None:
     cost_config = backtest_config.get("cost", {})
     exit_config = backtest_config.get("exit", {})
     limit_config = backtest_config.get("limit", {})
+    portfolio_config = backtest_config.get("portfolio", {})
 
     result = build_decision_backtest(
         decisions_path=args.decisions,
@@ -53,6 +54,7 @@ def main() -> None:
         cost_config=cost_config,
         exit_config=exit_config,
         limit_config=limit_config,
+        portfolio_config=portfolio_config,
         initial_equity=initial_equity,
         start_date=args.start_date,
         end_date=args.end_date,

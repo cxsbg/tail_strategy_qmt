@@ -54,6 +54,10 @@ backtest:
     enabled: true
     limit_up_pct: 0.098
     limit_down_pct: 0.098
+  portfolio:
+    enabled: true
+    max_gross_exposure: 1.0
+    max_concurrent_positions: 5
   cost:
     slippage_rate: 0.001
     commission_rate: 0.0003

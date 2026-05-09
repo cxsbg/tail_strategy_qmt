@@ -178,6 +178,48 @@ def test_run_decision_backtest_counts_missing_daily_cache_as_skipped(tmp_path) -
     assert summary["skipped_count"] == 1
 
 
+def test_run_decision_backtest_limits_portfolio_exposure(tmp_path) -> None:
+    pd = pytest.importorskip("pandas")
+    storage = ParquetStorage(tmp_path / "parquet")
+    storage.write_frame("daily", "000001.SZ", _daily_frame("000001.SZ"))
+    storage.write_frame("daily", "600000.SH", _daily_frame("600000.SH"))
+    decisions = pd.DataFrame(
+        [
+            {
+                "symbol": "000001.SZ",
+                "decision_date": "20240103",
+                "action": "OPEN_POSITION",
+                "score": 90.0,
+                "suggested_position_ratio": 0.6,
+            },
+            {
+                "symbol": "600000.SH",
+                "decision_date": "20240103",
+                "action": "OPEN_POSITION",
+                "score": 80.0,
+                "suggested_position_ratio": 0.6,
+            },
+        ]
+    )
+
+    trades, summary = run_decision_backtest(
+        decisions,
+        storage=storage,
+        holding_days=3,
+        portfolio_config={
+            "enabled": True,
+            "max_gross_exposure": 1.0,
+            "max_concurrent_positions": 5,
+        },
+    )
+
+    assert list(trades["symbol"]) == ["000001.SZ"]
+    assert summary["decision_count"] == 2
+    assert summary["trade_count"] == 1
+    assert summary["skipped_count"] == 1
+    assert summary["portfolio_skipped_count"] == 1
+
+
 def test_build_decision_backtest_writes_outputs(tmp_path) -> None:
     pytest.importorskip("pyarrow")
     pd = pytest.importorskip("pandas")
@@ -339,6 +381,7 @@ def test_render_backtest_markdown_includes_summary_and_trades() -> None:
         "decision_count": 1,
         "trade_count": 1,
         "skipped_count": 0,
+        "portfolio_skipped_count": 0,
         "stop_loss_count": 0,
         "take_profit_count": 0,
         "time_exit_count": 1,
@@ -367,6 +410,7 @@ def test_render_backtest_markdown_includes_summary_and_trades() -> None:
     markdown = render_backtest_markdown(summary=summary, trades=trades, equity_curve=equity_curve)
 
     assert "- Trades: 1" in markdown
+    assert "- Portfolio skipped: 0" in markdown
     assert "- Time exits: 1" in markdown
     assert "- Max drawdown: 0.00%" in markdown
     assert "| 20240106 | 3.30% | 1.03 | 0.00% | 1 |" in markdown

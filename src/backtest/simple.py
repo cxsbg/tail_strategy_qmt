@@ -41,6 +41,7 @@ SUMMARY_COLUMNS = [
     "decision_count",
     "trade_count",
     "skipped_count",
+    "portfolio_skipped_count",
     "stop_loss_count",
     "take_profit_count",
     "time_exit_count",
@@ -80,6 +81,7 @@ def run_decision_backtest(
     cost_config: dict[str, Any] | None = None,
     exit_config: dict[str, Any] | None = None,
     limit_config: dict[str, Any] | None = None,
+    portfolio_config: dict[str, Any] | None = None,
     initial_equity: float = 1.0,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -97,6 +99,7 @@ def run_decision_backtest(
     costs = _normalize_cost_config(cost_config)
     exits = _normalize_exit_config(exit_config)
     limits = _normalize_limit_config(limit_config)
+    portfolio = _normalize_portfolio_config(portfolio_config)
 
     frame = decisions.copy()
     if start_date is not None:
@@ -111,6 +114,7 @@ def run_decision_backtest(
 
     rows: list[dict[str, object]] = []
     skipped_count = 0
+    portfolio_skipped_count = 0
     daily_cache: dict[str, object] = {}
     for _, decision in open_decisions.iterrows():
         symbol = str(decision["symbol"])
@@ -131,6 +135,9 @@ def run_decision_backtest(
         )
         if trade is None:
             skipped_count += 1
+        elif not _portfolio_allows_trade(trade, rows, portfolio):
+            skipped_count += 1
+            portfolio_skipped_count += 1
         else:
             rows.append(trade)
 
@@ -145,6 +152,7 @@ def run_decision_backtest(
         decision_count=len(open_decisions),
         trades=trades,
         skipped_count=skipped_count,
+        portfolio_skipped_count=portfolio_skipped_count,
         equity_curve=equity_curve,
         initial_equity=initial_equity,
     )
@@ -163,6 +171,7 @@ def build_decision_backtest(
     cost_config: dict[str, Any] | None = None,
     exit_config: dict[str, Any] | None = None,
     limit_config: dict[str, Any] | None = None,
+    portfolio_config: dict[str, Any] | None = None,
     initial_equity: float = 1.0,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -180,6 +189,7 @@ def build_decision_backtest(
         cost_config=cost_config,
         exit_config=exit_config,
         limit_config=limit_config,
+        portfolio_config=portfolio_config,
         initial_equity=initial_equity,
         start_date=start_date,
         end_date=end_date,
@@ -403,6 +413,7 @@ def _summary(
     decision_count: int,
     trades: object,
     skipped_count: int,
+    portfolio_skipped_count: int,
     equity_curve: object,
     initial_equity: float,
 ) -> dict[str, object]:
@@ -411,6 +422,7 @@ def _summary(
             "decision_count": decision_count,
             "trade_count": 0,
             "skipped_count": skipped_count,
+            "portfolio_skipped_count": portfolio_skipped_count,
             "stop_loss_count": 0,
             "take_profit_count": 0,
             "time_exit_count": 0,
@@ -438,6 +450,7 @@ def _summary(
         "decision_count": decision_count,
         "trade_count": len(trades),
         "skipped_count": skipped_count,
+        "portfolio_skipped_count": portfolio_skipped_count,
         "stop_loss_count": _reason_count(trades, "stop_loss"),
         "take_profit_count": _reason_count(trades, "take_profit"),
         "time_exit_count": _reason_count(trades, "time_exit"),
@@ -469,6 +482,7 @@ def render_backtest_markdown(*, summary: dict[str, object], trades: object, equi
         f"- Decisions: {int(summary['decision_count'])}",
         f"- Trades: {int(summary['trade_count'])}",
         f"- Skipped: {int(summary['skipped_count'])}",
+        f"- Portfolio skipped: {int(summary['portfolio_skipped_count'])}",
         f"- Stop loss exits: {int(summary['stop_loss_count'])}",
         f"- Take profit exits: {int(summary['take_profit_count'])}",
         f"- Time exits: {int(summary['time_exit_count'])}",
@@ -564,6 +578,36 @@ def _normalize_limit_config(limit_config: dict[str, Any] | None) -> dict[str, fl
         "limit_up_pct": max(0.0, float(config.get("limit_up_pct", 0.098))),
         "limit_down_pct": max(0.0, float(config.get("limit_down_pct", 0.098))),
     }
+
+
+def _normalize_portfolio_config(portfolio_config: dict[str, Any] | None) -> dict[str, float | int | bool]:
+    config = portfolio_config or {}
+    return {
+        "enabled": bool(config.get("enabled", True)),
+        "max_gross_exposure": max(0.0, float(config.get("max_gross_exposure", 1.0))),
+        "max_concurrent_positions": max(0, int(config.get("max_concurrent_positions", 999999))),
+    }
+
+
+def _portfolio_allows_trade(
+    trade: dict[str, object],
+    accepted_trades: list[dict[str, object]],
+    portfolio_config: dict[str, float | int | bool],
+) -> bool:
+    if not bool(portfolio_config["enabled"]):
+        return True
+
+    entry_date = str(trade["entry_date"])
+    active_trades = [
+        item
+        for item in accepted_trades
+        if str(item["entry_date"]) <= entry_date <= str(item["exit_date"])
+    ]
+    next_exposure = sum(float(item["position_ratio"]) for item in active_trades) + float(trade["position_ratio"])
+    next_positions = len(active_trades) + 1
+    if next_exposure > float(portfolio_config["max_gross_exposure"]) + 1e-12:
+        return False
+    return next_positions <= int(portfolio_config["max_concurrent_positions"])
 
 
 def _reason_count(trades: object, prefix: str) -> int:
