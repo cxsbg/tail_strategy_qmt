@@ -324,7 +324,7 @@ outputs/backtest_equity_curve.csv
 outputs/backtest_report.md
 ```
 
-当前回测假设为：决策日之后第一个交易日开盘买入，然后逐日检查 `backtest.exit.stop_loss_pct` 和 `backtest.exit.take_profit_pct`，触发后按阈值价退出；如果未触发，则持有 `backtest.holding_days` 指定的交易日数后收盘卖出。由于日线无法判断同一天高低点先后顺序，如果止损和止盈同日触发，会按更保守的止损处理。回测会按 `backtest.cost` 扣减滑点、佣金和卖出印花税，同时保留 `gross_return` 与 `net_return`。`backtest.limit` 会近似处理涨跌停：开盘接近涨停时跳过买入，卖出日接近跌停时延后到后续可卖日期。权益曲线按交易退出日确认收益，把同日退出交易的 `weighted_net_return` 聚合为当日组合收益，并计算复合收益和最大回撤。它用于快速评估信号方向，不包含真实撮合、盘口排队和每日持仓盯市。
+当前回测假设为：决策日之后第一个交易日开盘买入，然后逐日检查 `backtest.exit.stop_loss_pct` 和 `backtest.exit.take_profit_pct`，触发后按阈值价退出；如果未触发，则持有 `backtest.holding_days` 指定的交易日数后收盘卖出。由于日线无法判断同一天高低点先后顺序，如果止损和止盈同日触发，会按更保守的止损处理。回测会按 `backtest.cost` 扣减滑点、佣金和卖出印花税，同时保留 `gross_return` 与 `net_return`。`backtest.limit` 会近似处理涨跌停：开盘接近涨停时跳过买入，卖出日接近跌停时延后到后续可卖日期。权益曲线会在持仓期间用日线收盘价估算浮盈浮亏，退出日使用最终 `weighted_net_return`，并计算复合收益和最大回撤。它用于快速评估信号方向，不包含真实撮合、盘口排队和复杂资金再分配。
 
 ## 阶段 1 已提供的代码
 
@@ -358,4 +358,4 @@ outputs/backtest_report.md
 
 ## 下一阶段建议
 
-下一步建议补充更细的组合再平衡和每日持仓盯市，让回测更接近真实资金占用。自动交易仍建议最后再接。
+下一步建议补充更细的组合再平衡和资金占用控制，让回测更接近真实账户表现。自动交易仍建议最后再接。

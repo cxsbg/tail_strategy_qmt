@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from backtest.simple import build_decision_backtest, build_equity_curve, render_backtest_markdown, run_decision_backtest
+from backtest.simple import (
+    build_decision_backtest,
+    build_equity_curve,
+    build_mark_to_market_equity_curve,
+    render_backtest_markdown,
+    run_decision_backtest,
+)
 from storage.parquet import ParquetStorage
 
 
@@ -245,6 +251,69 @@ def test_build_equity_curve_groups_returns_by_exit_date() -> None:
     assert curve.loc[0, "equity"] == pytest.approx(1.02)
     assert curve.loc[1, "equity"] == pytest.approx(1.02 * 0.95)
     assert curve.loc[1, "drawdown"] == pytest.approx(-0.05)
+
+
+def test_build_mark_to_market_equity_curve_tracks_unrealized_drawdown(tmp_path) -> None:
+    pd = pytest.importorskip("pandas")
+    storage = ParquetStorage(tmp_path / "parquet")
+    storage.write_frame(
+        "daily",
+        "000001.SZ",
+        pd.DataFrame(
+            [
+                {
+                    "symbol": "000001.SZ",
+                    "date": "20240104",
+                    "open": 10.0,
+                    "high": 10.3,
+                    "low": 9.8,
+                    "close": 10.0,
+                    "volume": 1000,
+                    "amount": 100_000_000,
+                },
+                {
+                    "symbol": "000001.SZ",
+                    "date": "20240105",
+                    "open": 9.0,
+                    "high": 9.2,
+                    "low": 8.8,
+                    "close": 9.0,
+                    "volume": 1001,
+                    "amount": 100_000_001,
+                },
+                {
+                    "symbol": "000001.SZ",
+                    "date": "20240106",
+                    "open": 10.8,
+                    "high": 11.2,
+                    "low": 10.7,
+                    "close": 11.0,
+                    "volume": 1002,
+                    "amount": 100_000_002,
+                },
+            ]
+        ),
+    )
+    trades = pd.DataFrame(
+        [
+            {
+                "symbol": "000001.SZ",
+                "entry_date": "20240104",
+                "exit_date": "20240106",
+                "entry_price": 10.0,
+                "position_ratio": 0.5,
+                "weighted_net_return": 0.05,
+            }
+        ]
+    )
+
+    curve = build_mark_to_market_equity_curve(trades, storage=storage)
+
+    assert list(curve["date"]) == ["20240104", "20240105", "20240106"]
+    assert curve.loc[0, "equity"] == pytest.approx(1.0)
+    assert curve.loc[1, "equity"] == pytest.approx(0.95)
+    assert curve.loc[2, "equity"] == pytest.approx(1.05)
+    assert curve["drawdown"].min() == pytest.approx(-0.05)
 
 
 def test_render_backtest_markdown_includes_summary_and_trades() -> None:

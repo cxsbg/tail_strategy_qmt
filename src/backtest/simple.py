@@ -135,7 +135,12 @@ def run_decision_backtest(
             rows.append(trade)
 
     trades = pd.DataFrame(rows, columns=TRADE_COLUMNS)
-    equity_curve = build_equity_curve(trades, initial_equity=initial_equity)
+    equity_curve = build_mark_to_market_equity_curve(
+        trades,
+        storage=storage,
+        initial_equity=initial_equity,
+        cost_config=costs,
+    )
     summary = _summary(
         decision_count=len(open_decisions),
         trades=trades,
@@ -179,7 +184,12 @@ def build_decision_backtest(
         start_date=start_date,
         end_date=end_date,
     )
-    equity_curve = build_equity_curve(trades, initial_equity=initial_equity)
+    equity_curve = build_mark_to_market_equity_curve(
+        trades,
+        storage=ParquetStorage(parquet_root),
+        initial_equity=initial_equity,
+        cost_config=cost_config,
+    )
 
     trades_path = Path(trades_output_path)
     summary_path = Path(summary_output_path)
@@ -301,6 +311,91 @@ def build_equity_curve(trades: object, *, initial_equity: float = 1.0) -> object
     grouped["equity"] = initial_equity * (1.0 + grouped["period_return"]).cumprod()
     grouped["drawdown"] = grouped["equity"] / grouped["equity"].cummax() - 1.0
     return grouped[EQUITY_COLUMNS]
+
+
+def build_mark_to_market_equity_curve(
+    trades: object,
+    *,
+    storage: ParquetStorage,
+    initial_equity: float = 1.0,
+    cost_config: dict[str, Any] | None = None,
+) -> object:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise StorageError("pandas is required to build mark-to-market equity curves.") from exc
+
+    if not isinstance(trades, pd.DataFrame):
+        raise StorageError("build_mark_to_market_equity_curve expects trades to be a pandas DataFrame.")
+    if initial_equity <= 0:
+        raise StorageError("initial_equity must be positive.")
+    if trades.empty:
+        return pd.DataFrame(columns=EQUITY_COLUMNS)
+    required = {"symbol", "entry_date", "exit_date", "entry_price", "position_ratio", "weighted_net_return"}
+    missing = required - set(trades.columns)
+    if missing:
+        raise StorageError(f"Trade frame missing required columns: {', '.join(sorted(missing))}")
+
+    costs = _normalize_cost_config(cost_config)
+    daily_by_symbol: dict[str, object] = {}
+    all_dates: set[str] = set()
+    min_date = str(trades["entry_date"].min())
+    max_date = str(trades["exit_date"].max())
+    for symbol in sorted(set(trades["symbol"])):
+        frame = _load_daily_frame(storage, str(symbol), pd)
+        frame = frame.loc[(frame["date"] >= min_date) & (frame["date"] <= max_date)].copy()
+        if frame.empty:
+            continue
+        daily_by_symbol[str(symbol)] = frame
+        all_dates.update(str(date) for date in frame["date"])
+
+    if not all_dates:
+        return pd.DataFrame(columns=EQUITY_COLUMNS)
+
+    rows: list[dict[str, object]] = []
+    equity_values: list[float] = []
+    for date in sorted(all_dates):
+        contribution = 0.0
+        active_count = 0
+        for _, trade in trades.iterrows():
+            symbol = str(trade["symbol"])
+            if date < str(trade["entry_date"]):
+                continue
+            if date >= str(trade["exit_date"]):
+                contribution += float(trade["weighted_net_return"])
+                continue
+
+            daily_frame = daily_by_symbol.get(symbol)
+            if daily_frame is None:
+                continue
+            mark = daily_frame.loc[(daily_frame["date"] >= str(trade["entry_date"])) & (daily_frame["date"] <= date)]
+            if mark.empty:
+                continue
+            active_count += 1
+            mark_price = float(mark.iloc[-1]["close"])
+            entry_price = float(trade["entry_price"])
+            position_ratio = float(trade["position_ratio"])
+            entry_cost_rate = costs["slippage_rate"] + costs["commission_rate"]
+            unrealized_return = mark_price / (entry_price * (1.0 + entry_cost_rate)) - 1.0
+            contribution += unrealized_return * position_ratio
+
+        equity = initial_equity * (1.0 + contribution)
+        equity_values.append(equity)
+        previous_equity = equity_values[-2] if len(equity_values) > 1 else initial_equity
+        period_return = equity / previous_equity - 1.0 if previous_equity else 0.0
+        rows.append(
+            {
+                "date": date,
+                "period_return": period_return,
+                "equity": equity,
+                "drawdown": 0.0,
+                "trade_count": active_count,
+            }
+        )
+
+    curve = pd.DataFrame(rows, columns=EQUITY_COLUMNS)
+    curve["drawdown"] = curve["equity"] / curve["equity"].cummax() - 1.0
+    return curve
 
 
 def _summary(
