@@ -78,6 +78,18 @@ SCHEMA: tuple[str, ...] = (
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS decision_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        decision_id INTEGER NOT NULL UNIQUE,
+        symbol TEXT NOT NULL,
+        decision_date TEXT NOT NULL,
+        action TEXT NOT NULL,
+        status TEXT NOT NULL,
+        message TEXT,
+        created_at TEXT
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS data_sync_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT NOT NULL,

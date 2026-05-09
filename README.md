@@ -299,6 +299,31 @@ data/database/tail_strategy.db
 
 当前决策动作仍是辅助建议：`OPEN_POSITION`、`HOLD_POSITION`、`WATCH_POSITION`、`REDUCE_POSITION`、`WATCH_SIGNAL`、`SKIP_SIGNAL`。规则会限制总持仓数量和单日新开数量，并避免对已有持仓重复开仓。
 
+## 应用决策到本地持仓
+
+确认 `decisions` 没问题后，可以把指定日期的决策应用到本地持仓状态机：
+
+```powershell
+conda activate stock
+python -m scripts.apply_decisions --date 20260508
+```
+
+脚本会读取 SQLite `decisions`、本地日线缓存 `data/parquet/daily/*.parquet`，并把结果写入：
+
+```text
+data/database/tail_strategy.db
+```
+
+应用规则只更新本地 `positions`、`trades` 和 `decision_applications` 表，不会连接真实交易接口，也不会自动下单。`OPEN_POSITION` 会按决策日收盘价本地记账开仓，并把仓位限制在 `position.max_single_stock_ratio` 内；`HOLD_POSITION` / `WATCH_POSITION` 会标记持仓状态；`REDUCE_POSITION` 会按决策日收盘价本地减到 0。`WATCH_SIGNAL` 和 `SKIP_SIGNAL` 不改变持仓。
+
+可以先预览不落库：
+
+```powershell
+python -m scripts.apply_decisions --date 20260508 --dry-run
+```
+
+脚本会记录每条决策的应用结果，重复运行已经成功应用或跳过的决策不会重复写交易。失败的决策会保留失败原因，修复日线缓存等问题后可以再次运行。
+
 ## 轻量回测
 
 可以基于 `OPEN_POSITION` 决策和本地日线缓存运行一个基础离线回测：
@@ -387,11 +412,13 @@ outputs/pipeline_validation.md
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
 - `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
+- `scripts/apply_decisions.py`：把风控决策应用到本地持仓状态机。
 - `scripts/run_backtest.py`：基于风控决策和本地日线缓存运行轻量回测。
 - `scripts/run_backtest_sweep.py`：批量扫描回测参数组合。
 - `scripts/validate_pipeline.py`：检查本地全流程产物和 SQLite 状态。
 - `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
 - `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
+- `src/strategy/apply_decisions.py`：决策应用、幂等记录和持仓状态机衔接。
 - `src/backtest/simple.py`：轻量决策回测引擎。
 - `src/backtest/sweep.py`：回测参数扫描。
 - `src/validation/pipeline.py`：本地流水线产物体检。
@@ -402,4 +429,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议把参数扫描结果做成 Markdown 摘要报告，方便直接查看 Top 参数组合。自动交易仍建议最后再接。
+下一步建议把参数扫描结果做成 Markdown 摘要报告，并继续完善真实 QMT 下单前的风控确认。自动交易仍建议最后再接。

@@ -16,9 +16,20 @@ from strategy.decisions import (
     build_and_store_decisions,
     build_decisions,
 )
+from strategy.apply_decisions import (
+    DecisionApplication,
+    DecisionApplicationRepository,
+    DecisionApplicationStatus,
+    DecisionApplyResult,
+    apply_decisions_to_positions,
+)
 
 __all__ = [
     "DecisionAction",
+    "DecisionApplication",
+    "DecisionApplicationRepository",
+    "DecisionApplicationStatus",
+    "DecisionApplyResult",
     "DecisionBuildResult",
     "DecisionRepository",
     "SignalBuildResult",
@@ -30,4 +41,5 @@ __all__ = [
     "build_and_store_signals",
     "build_decisions",
     "build_signals",
+    "apply_decisions_to_positions",
 ]

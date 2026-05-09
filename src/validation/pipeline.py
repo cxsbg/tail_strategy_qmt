@@ -100,7 +100,14 @@ def _validate_sqlite(*, sqlite_path: Path, trade_date: str) -> list[ValidationCh
     if not sqlite_path.exists():
         return [_check("sqlite.database", "FAIL", f"Missing database: {sqlite_path}")]
 
-    required_tables = {"positions", "trades", "signals", "decisions", "data_sync_status"}
+    required_tables = {
+        "positions",
+        "trades",
+        "signals",
+        "decisions",
+        "decision_applications",
+        "data_sync_status",
+    }
     try:
         with sqlite3.connect(sqlite_path) as conn:
             conn.row_factory = sqlite3.Row
