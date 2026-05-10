@@ -6,6 +6,7 @@ from trading.execution import (
     BrokerOrderStatus,
     TradeExecutionRepository,
 )
+from trading.cycle import TradingCycleResult, run_trading_cycle
 from trading.pre_trade import (
     CheckStatus,
     OrderDraft,
@@ -25,6 +26,7 @@ __all__ = [
     "BrokerOrder",
     "BrokerOrderStatus",
     "BrokerSyncResult",
+    "TradingCycleResult",
     "CheckStatus",
     "LiveOrderSubmitter",
     "OrderDraft",
@@ -38,5 +40,6 @@ __all__ = [
     "TradeExecutionRepository",
     "render_pre_trade_markdown",
     "run_pre_trade",
+    "run_trading_cycle",
     "sync_broker_executions",
 ]

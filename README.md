@@ -361,6 +361,29 @@ python -m scripts.sync_broker_executions --date 20260508 --apply-positions
 
 成交回写带有幂等记录：同一笔成交重复查询不会重复写入 `broker_fills`，同一个已成交委托重复同步也不会重复开仓或重复平仓。
 
+## 日内交易循环
+
+也可以用一个脚本串起下单前风控、提交订单和同步回报：
+
+```powershell
+conda activate stock
+python -m scripts.run_trading_cycle --date 20260508 --apply-positions
+```
+
+执行顺序为：
+
+```text
+run_pre_trade
+sync_broker_executions
+optional apply positions
+```
+
+在 `paper` 模式下，脚本只会模拟提交，不会连接 QMT，也不会执行 broker sync。在 `live` 模式下，脚本会使用 QMT trader 提交订单，并按 `--sync-attempts` / `--sync-interval-seconds` 同步回报。若只想做风控检查但不提交：
+
+```powershell
+python -m scripts.run_trading_cycle --date 20260508 --no-submit
+```
+
 ## QMT 交易接口边界
 
 真实自动委托的接口边界已经隔离在 `src/qmt/`，包括下单、撤单、查询委托、查询成交和查询持仓的协议模型，以及 `XtQuantTraderAdapter`。它会延迟导入 `xtquant`，没有 QMT 环境时不会影响普通测试。
@@ -493,6 +516,7 @@ outputs/pipeline_validation.md
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
 - `scripts/run_pre_trade.py`：生成订单草稿、执行下单前风控，并按 paper/live 模式提交。
 - `scripts/sync_broker_executions.py`：同步 QMT 委托/成交回报，并可按成交更新本地持仓。
+- `scripts/run_trading_cycle.py`：串起下单前风控、提交订单和 broker 回报同步。
 - `scripts/apply_decisions.py`：把风控决策应用到本地持仓状态机。
 - `scripts/run_backtest.py`：基于风控决策和本地日线缓存运行轻量回测。
 - `scripts/run_backtest_sweep.py`：批量扫描回测参数组合并生成 Markdown 摘要。
@@ -504,6 +528,7 @@ outputs/pipeline_validation.md
 - `src/trading/submitter.py`：paper/live 订单提交器。
 - `src/trading/execution.py`：券商委托和成交 SQLite 仓储。
 - `src/trading/sync.py`：QMT 委托/成交同步和成交后持仓回写。
+- `src/trading/cycle.py`：日内交易循环编排。
 - `src/backtest/simple.py`：轻量决策回测引擎。
 - `src/backtest/sweep.py`：回测参数扫描和摘要报告渲染。
 - `src/validation/pipeline.py`：本地流水线产物体检。
@@ -514,4 +539,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议增强部分成交处理、成交后资金/持仓复核，以及把 pre-trade、live submit、broker sync 串成一个日内自动执行脚本。
+下一步建议增强部分成交处理、成交后资金/持仓复核，以及增加交易循环运行报告。
