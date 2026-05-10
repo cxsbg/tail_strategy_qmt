@@ -10,8 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "PyYAML>=6.0",
+    "fastapi>=0.136",
+    "httpx>=0.28",
     "pandas>=2.0",
     "pyarrow>=14.0",
+    "uvicorn>=0.46",
 ]
 
 [project.optional-dependencies]

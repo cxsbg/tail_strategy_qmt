@@ -644,6 +644,33 @@ python -m scripts.build_readiness_report --require-live-config --require-recent-
 
 默认模式会把“还没演练、还没生成某些报告”标成 `WARN`；严格模式适合正式切到自动运行前使用。
 
+## Web 控制台
+
+如果不想记命令，可以启动本地 Web 控制台：
+
+```powershell
+conda activate stock
+python -m scripts.run_web_console
+```
+
+然后在浏览器打开：
+
+```text
+http://127.0.0.1:8765
+```
+
+控制台目前提供：
+
+- QMT 配置检查
+- 上线就绪报告
+- 运行监控报告
+- 运行健康检查
+- 交易循环 `--no-submit` 演练
+- Windows 任务计划命令生成
+- Live 交易循环入口
+
+红色 Live 入口会要求二次确认。正式实盘前，建议先用按钮跑完 QMT 检查、上线就绪报告和 `--no-submit` 演练。
+
 ## 全流程体检
 
 完整跑完数据、信号、决策、报告和回测后，可以生成一份本地体检报告：
