@@ -18,11 +18,13 @@ from trading.pre_trade import (
     run_pre_trade,
 )
 from trading.submitter import LiveOrderSubmitter, OrderSubmitResult, PaperOrderSubmitter
+from trading.sync import BrokerSyncResult, sync_broker_executions
 
 __all__ = [
     "BrokerFill",
     "BrokerOrder",
     "BrokerOrderStatus",
+    "BrokerSyncResult",
     "CheckStatus",
     "LiveOrderSubmitter",
     "OrderDraft",
@@ -36,4 +38,5 @@ __all__ = [
     "TradeExecutionRepository",
     "render_pre_trade_markdown",
     "run_pre_trade",
+    "sync_broker_executions",
 ]

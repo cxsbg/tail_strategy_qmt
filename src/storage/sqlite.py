@@ -153,6 +153,17 @@ SCHEMA: tuple[str, ...] = (
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS broker_order_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        broker_order_id TEXT NOT NULL UNIQUE,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL,
+        status TEXT NOT NULL,
+        message TEXT,
+        created_at TEXT
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS data_sync_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT NOT NULL,

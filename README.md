@@ -337,6 +337,30 @@ trading:
 
 `BUY` 委托数量会按 `order_value_base * position_ratio / reference_price` 计算并按 100 股取整；`SELL` 委托会读取 QMT 持仓可用数量。建议先保留 `mode: paper` 跑通报告和状态，再切 `live`。
 
+## QMT 委托成交同步
+
+真实委托发出后，可以同步 QMT 的委托和成交回报：
+
+```powershell
+conda activate stock
+python -m scripts.sync_broker_executions --date 20260508
+```
+
+默认会更新：
+
+```text
+broker_orders
+broker_fills
+```
+
+如果希望在委托完全成交后同步更新本地 `positions` / `trades`，可以追加：
+
+```powershell
+python -m scripts.sync_broker_executions --date 20260508 --apply-positions
+```
+
+成交回写带有幂等记录：同一笔成交重复查询不会重复写入 `broker_fills`，同一个已成交委托重复同步也不会重复开仓或重复平仓。
+
 ## QMT 交易接口边界
 
 真实自动委托的接口边界已经隔离在 `src/qmt/`，包括下单、撤单、查询委托、查询成交和查询持仓的协议模型，以及 `XtQuantTraderAdapter`。它会延迟导入 `xtquant`，没有 QMT 环境时不会影响普通测试。
@@ -346,9 +370,10 @@ trading:
 ```text
 broker_orders
 broker_fills
+broker_order_applications
 ```
 
-当前版本已经支持把 `READY` 订单接到 QMT live 提交器；成交查询和本地持仓按成交回写仍在下一步完善。
+当前版本已经支持把 `READY` 订单接到 QMT live 提交器，并同步委托/成交回报；更细的部分成交处理和成交后复核仍可继续增强。
 
 ## 应用决策到本地持仓
 
@@ -467,6 +492,7 @@ outputs/pipeline_validation.md
 - `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
 - `scripts/run_pre_trade.py`：生成订单草稿、执行下单前风控，并按 paper/live 模式提交。
+- `scripts/sync_broker_executions.py`：同步 QMT 委托/成交回报，并可按成交更新本地持仓。
 - `scripts/apply_decisions.py`：把风控决策应用到本地持仓状态机。
 - `scripts/run_backtest.py`：基于风控决策和本地日线缓存运行轻量回测。
 - `scripts/run_backtest_sweep.py`：批量扫描回测参数组合并生成 Markdown 摘要。
@@ -477,6 +503,7 @@ outputs/pipeline_validation.md
 - `src/trading/pre_trade.py`：订单草稿、自动风控闸门和提交编排。
 - `src/trading/submitter.py`：paper/live 订单提交器。
 - `src/trading/execution.py`：券商委托和成交 SQLite 仓储。
+- `src/trading/sync.py`：QMT 委托/成交同步和成交后持仓回写。
 - `src/backtest/simple.py`：轻量决策回测引擎。
 - `src/backtest/sweep.py`：回测参数扫描和摘要报告渲染。
 - `src/validation/pipeline.py`：本地流水线产物体检。
@@ -487,4 +514,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议实现 QMT 委托/成交轮询，把 `broker_orders` 和 `broker_fills` 的回报自动同步，并按成交结果更新本地持仓。
+下一步建议增强部分成交处理、成交后资金/持仓复核，以及把 pre-trade、live submit、broker sync 串成一个日内自动执行脚本。

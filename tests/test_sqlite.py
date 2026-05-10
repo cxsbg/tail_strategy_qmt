@@ -29,6 +29,7 @@ def test_initialize_creates_expected_tables(tmp_path) -> None:
         "pre_trade_checks",
         "broker_orders",
         "broker_fills",
+        "broker_order_applications",
         "data_sync_status",
     }.issubset(table_names)
 

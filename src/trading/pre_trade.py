@@ -93,6 +93,11 @@ class OrderDraftRepository:
             ).fetchone()
         return _row_to_draft(row) if row else None
 
+    def get_draft(self, order_id: int) -> OrderDraft | None:
+        with self.store.connect() as conn:
+            row = conn.execute("SELECT * FROM order_drafts WHERE id = ?", (order_id,)).fetchone()
+        return _row_to_draft(row) if row else None
+
     def upsert_draft(self, draft: OrderDraft) -> int:
         sql = """
         INSERT INTO order_drafts (
