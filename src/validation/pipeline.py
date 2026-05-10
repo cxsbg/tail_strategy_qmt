@@ -162,6 +162,7 @@ def _validate_reports(*, paths: dict[str, Path]) -> list[ValidationCheck]:
         _file_nonempty_check(paths["daily_report"], "daily_report", required=True),
         _file_nonempty_check(paths["decision_report"], "decision_report", required=True),
         _file_nonempty_check(paths["pre_trade_report"], "pre_trade_report", required=False),
+        _file_nonempty_check(paths["trading_cycle_report"], "trading_cycle_report", required=False),
     ]
 
 
@@ -261,6 +262,7 @@ def _default_paths() -> dict[str, Path]:
         "daily_report": Path("outputs/daily_report.md"),
         "decision_report": Path("outputs/decision_report.md"),
         "pre_trade_report": Path("outputs/pre_trade_report.md"),
+        "trading_cycle_report": Path("outputs/trading_cycle_report.md"),
         "backtest_summary": Path("outputs/backtest_summary.csv"),
         "backtest_report": Path("outputs/backtest_report.md"),
         "backtest_equity_curve": Path("outputs/backtest_equity_curve.csv"),

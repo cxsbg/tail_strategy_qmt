@@ -22,11 +22,14 @@ def test_run_trading_cycle_paper_submits_without_broker_sync(tmp_path) -> None:
         trade_date="20260508",
         strategy_version="test-rule",
         report_path=None,
+        cycle_report_path=tmp_path / "cycle.md",
     )
 
     draft = OrderDraftRepository(db_path).list_drafts(trade_date="20260508")[0]
     assert result.pre_trade.paper_submitted_count == 1
     assert result.sync_count == 0
+    assert result.report_path.exists()
+    assert "Trading Cycle Report" in result.report_path.read_text(encoding="utf-8")
     assert draft.status == OrderStatus.PAPER_SUBMITTED
     assert len(TradeExecutionRepository(db_path).list_orders(trade_date="20260508")) == 1
 
@@ -47,6 +50,7 @@ def test_run_trading_cycle_live_submits_syncs_and_applies_position(tmp_path) -> 
         trade_date="20260508",
         strategy_version="test-rule",
         report_path=None,
+        cycle_report_path=tmp_path / "cycle_live.md",
         apply_positions=True,
         trader=trader,
     )
@@ -58,6 +62,9 @@ def test_run_trading_cycle_live_submits_syncs_and_applies_position(tmp_path) -> 
     assert result.total_fill_inserted_count == 1
     assert result.total_position_application_count == 1
     assert broker_order.status.value == "FILLED"
+    markdown = result.report_path.read_text(encoding="utf-8")
+    assert "Broker Orders" in markdown
+    assert "live-1" in markdown
     assert position is not None
     assert position.entry_price == 10.5
 
@@ -77,12 +84,14 @@ def test_run_trading_cycle_live_can_skip_sync(tmp_path) -> None:
         trade_date="20260508",
         strategy_version="test-rule",
         report_path=None,
+        cycle_report_path=None,
         sync_broker=False,
         trader=_CycleTrader(),
     )
 
     assert result.pre_trade.submitted_count == 1
     assert result.sync_count == 0
+    assert result.report_path is None
     assert PositionRepository(db_path).list_open_positions() == []
 
 

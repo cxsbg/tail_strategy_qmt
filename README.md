@@ -378,6 +378,13 @@ sync_broker_executions
 optional apply positions
 ```
 
+默认会同时生成：
+
+```text
+outputs/pre_trade_report.md
+outputs/trading_cycle_report.md
+```
+
 在 `paper` 模式下，脚本只会模拟提交，不会连接 QMT，也不会执行 broker sync。在 `live` 模式下，脚本会使用 QMT trader 提交订单，并按 `--sync-attempts` / `--sync-interval-seconds` 同步回报。若只想做风控检查但不提交：
 
 ```powershell

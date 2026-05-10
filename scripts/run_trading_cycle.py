@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--parquet-root", help="Override Parquet root from data config.")
     parser.add_argument("--strategy-version", default="rule-v0")
     parser.add_argument("--report-output", default="outputs/pre_trade_report.md")
+    parser.add_argument("--cycle-report-output", default="outputs/trading_cycle_report.md")
     parser.add_argument("--no-submit", action="store_true", help="Build checks without submitting orders.")
     parser.add_argument("--no-sync", action="store_true", help="Skip broker order/fill sync after submission.")
     parser.add_argument(
@@ -57,6 +58,7 @@ def main() -> None:
         trade_date=args.date,
         strategy_version=args.strategy_version,
         report_path=args.report_output,
+        cycle_report_path=args.cycle_report_output,
         submit=not args.no_submit,
         sync_broker=not args.no_sync,
         apply_positions=args.apply_positions,
@@ -67,7 +69,8 @@ def main() -> None:
     logger.info(
         (
             "Trading cycle finished: date=%s drafts=%s blocked=%s paper_submitted=%s submitted=%s "
-            "rejected=%s syncs=%s inserted_fills=%s position_applications=%s report=%s db=%s"
+            "rejected=%s syncs=%s inserted_fills=%s position_applications=%s pre_trade_report=%s "
+            "cycle_report=%s db=%s"
         ),
         result.date,
         result.pre_trade.draft_count,
@@ -79,6 +82,7 @@ def main() -> None:
         result.total_fill_inserted_count,
         result.total_position_application_count,
         result.pre_trade.report_path,
+        result.report_path,
         result.db_path,
     )
 
