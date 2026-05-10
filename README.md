@@ -2,11 +2,11 @@
 
 基于国金 QMT / xtquant 的 A 股尾盘趋势确认策略辅助系统。
 
-当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线、基础持仓状态机、轻量离线回测和自动下单前风控闸门。机器学习和真实 QMT 自动委托暂不实现。
+当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线、基础持仓状态机、轻量离线回测、自动下单前风控闸门、QMT 自动委托边界、交易循环监控和机器学习研究数据集。
 
 ## 当前边界
 
-- 当前支持自动生成订单草稿并在 `paper` 模式下模拟提交；真实 QMT 自动委托尚未接入。
+- 当前支持自动生成订单草稿，并按 `paper` / `live` 模式走模拟提交或 QMT 提交边界。
 - 所有 `xtquant` 相关代码隔离在 `src/qmt/`。
 - 策略参数放在 `config/*.yaml`，业务代码不硬编码策略阈值。
 - 持仓、交易记录、策略信号、同步状态使用 SQLite。
@@ -496,6 +496,35 @@ python -m scripts.run_backtest_sweep --holding-days 3,5,8 --stop-loss 0.03,0.05 
 ```
 
 扫描结果会按 `score`、`compounded_return`、`max_drawdown` 和 `win_rate` 排序。`score` 是一个简单综合评分，只用于快速筛选参数组合，最终仍建议看交易数、回撤和收益稳定性。Markdown 摘要会列出最佳参数和 Top 组合，方便直接查看。
+
+## 机器学习研究数据集
+
+规则版可以先跑，机器学习层用于后续研究和筛选增强。先从日线特征生成带标签的数据集：
+
+```powershell
+conda activate stock
+python -m scripts.build_ml_dataset --horizon-days 5 --min-forward-return 0.03
+```
+
+默认读取：
+
+```text
+data/processed/daily_features.parquet
+```
+
+默认输出：
+
+```text
+data/processed/ml_dataset.parquet
+```
+
+如果只想基于规则候选股训练，可以加候选文件：
+
+```powershell
+python -m scripts.build_ml_dataset --candidates data/processed/candidates.parquet --horizon-days 5 --min-forward-return 0.03
+```
+
+标签含义：`forward_return >= min_forward_return` 记为 `label=1`，否则为 `0`。当前只负责产出稳定训练数据，不在实盘链路里直接使用模型下单。
 
 ## 交易循环调度与监控
 

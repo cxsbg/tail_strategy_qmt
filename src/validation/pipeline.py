@@ -155,6 +155,7 @@ def _validate_parquet_outputs(*, paths: dict[str, Path], trade_date: str) -> lis
             required=True,
             empty_status="WARN",
         ),
+        _parquet_date_check(paths["ml_dataset"], "ml_dataset", "date", trade_date, required=False, empty_status="WARN"),
     ]
     return checks
 
@@ -266,6 +267,7 @@ def _default_paths() -> dict[str, Path]:
         "tail_confirmation": Path("data/processed/tail_confirmation.parquet"),
         "signals": Path("data/processed/signals.parquet"),
         "decisions": Path("data/processed/decisions.parquet"),
+        "ml_dataset": Path("data/processed/ml_dataset.parquet"),
         "daily_report": Path("outputs/daily_report.md"),
         "decision_report": Path("outputs/decision_report.md"),
         "pre_trade_report": Path("outputs/pre_trade_report.md"),

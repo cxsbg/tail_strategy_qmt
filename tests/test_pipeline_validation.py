@@ -134,6 +134,10 @@ def _write_pipeline_parquet(pd, processed) -> None:
         processed / "decisions.parquet",
         index=False,
     )
+    pd.DataFrame([{"symbol": "000001.SZ", "date": "20260508"}]).to_parquet(
+        processed / "ml_dataset.parquet",
+        index=False,
+    )
 
 
 def _write_reports(outputs) -> None:
@@ -182,6 +186,7 @@ def _paths(processed, outputs):
         "tail_confirmation": processed / "tail.parquet",
         "signals": processed / "signals.parquet",
         "decisions": processed / "decisions.parquet",
+        "ml_dataset": processed / "ml_dataset.parquet",
         "daily_report": outputs / "daily_report.md",
         "decision_report": outputs / "decision_report.md",
         "pre_trade_report": outputs / "pre_trade_report.md",
