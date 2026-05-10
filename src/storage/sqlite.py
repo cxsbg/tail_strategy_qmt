@@ -90,6 +90,34 @@ SCHEMA: tuple[str, ...] = (
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS order_drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        decision_id INTEGER NOT NULL UNIQUE,
+        symbol TEXT NOT NULL,
+        trade_date TEXT NOT NULL,
+        side TEXT NOT NULL,
+        reference_price REAL,
+        position_ratio REAL NOT NULL,
+        status TEXT NOT NULL,
+        block_reasons TEXT,
+        strategy_version TEXT,
+        created_at TEXT,
+        submitted_at TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS pre_trade_checks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        decision_id INTEGER NOT NULL,
+        symbol TEXT NOT NULL,
+        check_name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        message TEXT,
+        created_at TEXT
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS data_sync_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT NOT NULL,

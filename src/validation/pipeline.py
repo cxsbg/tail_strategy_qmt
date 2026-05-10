@@ -106,6 +106,8 @@ def _validate_sqlite(*, sqlite_path: Path, trade_date: str) -> list[ValidationCh
         "signals",
         "decisions",
         "decision_applications",
+        "order_drafts",
+        "pre_trade_checks",
         "data_sync_status",
     }
     try:
@@ -156,6 +158,7 @@ def _validate_reports(*, paths: dict[str, Path]) -> list[ValidationCheck]:
     return [
         _file_nonempty_check(paths["daily_report"], "daily_report", required=True),
         _file_nonempty_check(paths["decision_report"], "decision_report", required=True),
+        _file_nonempty_check(paths["pre_trade_report"], "pre_trade_report", required=False),
     ]
 
 
@@ -254,6 +257,7 @@ def _default_paths() -> dict[str, Path]:
         "decisions": Path("data/processed/decisions.parquet"),
         "daily_report": Path("outputs/daily_report.md"),
         "decision_report": Path("outputs/decision_report.md"),
+        "pre_trade_report": Path("outputs/pre_trade_report.md"),
         "backtest_summary": Path("outputs/backtest_summary.csv"),
         "backtest_report": Path("outputs/backtest_report.md"),
         "backtest_equity_curve": Path("outputs/backtest_equity_curve.csv"),

@@ -141,6 +141,7 @@ def _write_reports(outputs) -> None:
     for name in [
         "daily_report.md",
         "decision_report.md",
+        "pre_trade_report.md",
         "backtest_summary.csv",
         "backtest_report.md",
         "backtest_equity_curve.csv",
@@ -177,6 +178,7 @@ def _paths(processed, outputs):
         "decisions": processed / "decisions.parquet",
         "daily_report": outputs / "daily_report.md",
         "decision_report": outputs / "decision_report.md",
+        "pre_trade_report": outputs / "pre_trade_report.md",
         "backtest_summary": outputs / "backtest_summary.csv",
         "backtest_report": outputs / "backtest_report.md",
         "backtest_equity_curve": outputs / "backtest_equity_curve.csv",

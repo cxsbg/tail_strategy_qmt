@@ -2,11 +2,11 @@
 
 基于国金 QMT / xtquant 的 A 股尾盘趋势确认策略辅助系统。
 
-当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线、基础持仓状态机和轻量离线回测。机器学习、自动交易暂不实现。
+当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线、基础持仓状态机、轻量离线回测和自动下单前风控闸门。机器学习和真实 QMT 自动委托暂不实现。
 
 ## 当前边界
 
-- 初期只输出辅助决策，不自动下单。
+- 当前支持自动生成订单草稿并在 `paper` 模式下模拟提交；真实 QMT 自动委托尚未接入。
 - 所有 `xtquant` 相关代码隔离在 `src/qmt/`。
 - 策略参数放在 `config/*.yaml`，业务代码不硬编码策略阈值。
 - 持仓、交易记录、策略信号、同步状态使用 SQLite。
@@ -29,6 +29,7 @@ src/
   features/
   strategy/
   position/
+  trading/
   backtest/
   ml/
   reports/
@@ -299,6 +300,30 @@ data/database/tail_strategy.db
 
 当前决策动作仍是辅助建议：`OPEN_POSITION`、`HOLD_POSITION`、`WATCH_POSITION`、`REDUCE_POSITION`、`WATCH_SIGNAL`、`SKIP_SIGNAL`。规则会限制总持仓数量和单日新开数量，并避免对已有持仓重复开仓。
 
+## 下单前自动风控
+
+生成 `decisions` 后，可以自动生成订单草稿、执行下单前风控，并在 `paper` 模式下模拟提交通过的订单：
+
+```powershell
+conda activate stock
+python -m scripts.run_pre_trade --date 20260508
+```
+
+默认读取 SQLite `decisions`、当前 `positions` 和本地日线缓存，写入：
+
+```text
+data/database/tail_strategy.db
+outputs/pre_trade_report.md
+```
+
+风控闸门会自动检查重复持仓、单笔仓位、组合总仓位、持仓数量、涨跌停和行情缺失等条件。通过的订单在 `trading.mode: paper` 下会标记为 `PAPER_SUBMITTED`；被拦截的订单会标记为 `BLOCKED` 并记录原因。重复运行不会重复提交已经 paper submitted 的订单。
+
+如只想生成订单草稿和检查结果，不模拟提交：
+
+```powershell
+python -m scripts.run_pre_trade --date 20260508 --no-submit
+```
+
 ## 应用决策到本地持仓
 
 确认 `decisions` 没问题后，可以把指定日期的决策应用到本地持仓状态机：
@@ -314,7 +339,7 @@ python -m scripts.apply_decisions --date 20260508
 data/database/tail_strategy.db
 ```
 
-应用规则只更新本地 `positions`、`trades` 和 `decision_applications` 表，不会连接真实交易接口，也不会自动下单。`OPEN_POSITION` 会按决策日收盘价本地记账开仓，并把仓位限制在 `position.max_single_stock_ratio` 内；`HOLD_POSITION` / `WATCH_POSITION` 会标记持仓状态；`REDUCE_POSITION` 会按决策日收盘价本地减到 0。`WATCH_SIGNAL` 和 `SKIP_SIGNAL` 不改变持仓。
+应用规则只更新本地 `positions`、`trades` 和 `decision_applications` 表，不会连接真实交易接口。`OPEN_POSITION` 会按决策日收盘价本地记账开仓，并把仓位限制在 `position.max_single_stock_ratio` 内；`HOLD_POSITION` / `WATCH_POSITION` 会标记持仓状态；`REDUCE_POSITION` 会按决策日收盘价本地减到 0。`WATCH_SIGNAL` 和 `SKIP_SIGNAL` 不改变持仓。
 
 可以先预览不落库：
 
@@ -413,6 +438,7 @@ outputs/pipeline_validation.md
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
 - `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
+- `scripts/run_pre_trade.py`：生成订单草稿、执行下单前风控并在 paper 模式模拟提交。
 - `scripts/apply_decisions.py`：把风控决策应用到本地持仓状态机。
 - `scripts/run_backtest.py`：基于风控决策和本地日线缓存运行轻量回测。
 - `scripts/run_backtest_sweep.py`：批量扫描回测参数组合并生成 Markdown 摘要。
@@ -420,6 +446,7 @@ outputs/pipeline_validation.md
 - `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
 - `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
 - `src/strategy/apply_decisions.py`：决策应用、幂等记录和持仓状态机衔接。
+- `src/trading/pre_trade.py`：订单草稿、自动风控闸门和 paper 提交流程。
 - `src/backtest/simple.py`：轻量决策回测引擎。
 - `src/backtest/sweep.py`：回测参数扫描和摘要报告渲染。
 - `src/validation/pipeline.py`：本地流水线产物体检。
@@ -430,4 +457,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议继续完善真实 QMT 下单前的人工确认、订单草稿和风控闸门。自动交易仍建议最后再接。
+下一步建议接入真实 QMT 委托适配器，并把 paper submitted 状态替换为真实委托回报状态。
