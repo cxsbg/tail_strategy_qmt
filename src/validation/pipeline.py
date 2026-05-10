@@ -169,6 +169,7 @@ def _validate_reports(*, paths: dict[str, Path]) -> list[ValidationCheck]:
         _file_nonempty_check(paths["trading_run_monitor"], "trading_run_monitor", required=False),
         _file_nonempty_check(paths["trading_run_health"], "trading_run_health", required=False),
         _file_nonempty_check(paths["qmt_smoke_test_report"], "qmt_smoke_test_report", required=False),
+        _file_nonempty_check(paths["readiness_report"], "readiness_report", required=False),
     ]
 
 
@@ -273,6 +274,7 @@ def _default_paths() -> dict[str, Path]:
         "trading_run_monitor": Path("outputs/trading_run_monitor.md"),
         "trading_run_health": Path("outputs/trading_run_health.md"),
         "qmt_smoke_test_report": Path("outputs/qmt_smoke_test.md"),
+        "readiness_report": Path("outputs/readiness_report.md"),
         "backtest_summary": Path("outputs/backtest_summary.csv"),
         "backtest_report": Path("outputs/backtest_report.md"),
         "backtest_equity_curve": Path("outputs/backtest_equity_curve.csv"),

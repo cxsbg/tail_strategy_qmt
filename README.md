@@ -574,6 +574,29 @@ outputs/qmt_smoke_test.md
 
 如果报告里有 `FAIL`，先处理失败项；如果只有 `WARN`，通常表示某些可选项还没跑过或当前没有连接检查。
 
+## 上线就绪总报告
+
+可以生成一张总检查表，把配置、数据库、smoke test、运行健康检查和关键报告产物收拢到一起：
+
+```powershell
+conda activate stock
+python -m scripts.build_readiness_report
+```
+
+默认输出：
+
+```text
+outputs/readiness_report.md
+```
+
+上线前更严格地检查 live 配置和最近运行记录：
+
+```powershell
+python -m scripts.build_readiness_report --require-live-config --require-recent-run --fail-on-warn
+```
+
+默认模式会把“还没演练、还没生成某些报告”标成 `WARN`；严格模式适合正式切到自动运行前使用。
+
 ## 全流程体检
 
 完整跑完数据、信号、决策、报告和回测后，可以生成一份本地体检报告：
@@ -639,4 +662,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议在真实 QMT 环境先跑 `scripts.qmt_smoke_test --connect`，再做一次 `--no-submit` 的端到端演练，确认报告和数据库状态都符合预期。
+下一步建议在真实 QMT 环境先跑 `scripts.qmt_smoke_test --connect`，再做一次 `scripts.run_trading_cycle_scheduled --no-submit` 的端到端演练，最后用 `scripts.build_readiness_report --require-live-config --require-recent-run` 看还剩哪些 `WARN`。
