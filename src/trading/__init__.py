@@ -27,6 +27,7 @@ from trading.reconcile import (
     render_position_reconciliation_markdown,
 )
 from trading.run_log import TradingCycleRun, TradingCycleRunRepository
+from trading.smoke_test import QmtSmokeTestResult, SmokeCheck, render_qmt_smoke_markdown, run_qmt_smoke_test
 from trading.submitter import LiveOrderSubmitter, OrderSubmitResult, PaperOrderSubmitter
 from trading.sync import BrokerSyncResult, sync_broker_executions
 
@@ -50,13 +51,17 @@ __all__ = [
     "PreTradeResult",
     "PositionReconciliationItem",
     "PositionReconciliationResult",
+    "QmtSmokeTestResult",
+    "SmokeCheck",
     "TradeExecutionRepository",
     "TradingCycleRun",
     "TradingCycleRunRepository",
     "reconcile_positions",
     "render_pre_trade_markdown",
     "render_position_reconciliation_markdown",
+    "render_qmt_smoke_markdown",
     "run_pre_trade",
+    "run_qmt_smoke_test",
     "run_trading_cycle",
     "sync_broker_executions",
 ]

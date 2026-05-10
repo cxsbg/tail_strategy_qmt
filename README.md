@@ -533,6 +533,29 @@ python -m scripts.run_trading_cycle_scheduled --skip-weekend --apply-positions -
 
 这个入口会在正常交易循环后自动刷新 `outputs/trading_run_monitor.md`；如果周末加了 `--skip-weekend`，会记录一条 `SKIPPED`，但不会下单。
 
+## QMT 实盘前 Smoke Test
+
+真正打开自动提交前，先跑安全检查。默认只检查配置、SQLite 和本地目录，不连接 QMT：
+
+```powershell
+conda activate stock
+python -m scripts.qmt_smoke_test
+```
+
+在装有 QMT/xtquant 的交易电脑上，可以加 `--connect`，它只会连接并查询持仓、委托、成交，不会提交订单：
+
+```powershell
+python -m scripts.qmt_smoke_test --connect
+```
+
+默认输出：
+
+```text
+outputs/qmt_smoke_test.md
+```
+
+如果报告里有 `FAIL`，先处理失败项；如果只有 `WARN`，通常表示某些可选项还没跑过或当前没有连接检查。
+
 ## 全流程体检
 
 完整跑完数据、信号、决策、报告和回测后，可以生成一份本地体检报告：
@@ -598,4 +621,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议增强交易循环调度、运行监控告警，以及在真实 QMT 环境做一次小资金/纸面账户的端到端演练。
+下一步建议在真实 QMT 环境先跑 `scripts.qmt_smoke_test --connect`，再做一次 `--no-submit` 的端到端演练，确认报告和数据库状态都符合预期。

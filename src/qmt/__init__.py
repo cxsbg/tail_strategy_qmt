@@ -1,6 +1,7 @@
 """QMT / xtquant integration boundary."""
 
 from qmt.client import HistoryRequest, QmtClient
+from qmt.factory import build_xt_trader
 from qmt.trader import (
     QmtFillSnapshot,
     QmtOrderRequest,
@@ -29,4 +30,5 @@ __all__ = [
     "QmtTrader",
     "XtQuantAdapter",
     "XtQuantTraderAdapter",
+    "build_xt_trader",
 ]
