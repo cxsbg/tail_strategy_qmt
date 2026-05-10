@@ -2,7 +2,9 @@
 
 from trading.execution import (
     BrokerFill,
+    BrokerFillApplication,
     BrokerOrder,
+    BrokerOrderApplication,
     BrokerOrderStatus,
     TradeExecutionRepository,
 )
@@ -18,12 +20,20 @@ from trading.pre_trade import (
     render_pre_trade_markdown,
     run_pre_trade,
 )
+from trading.reconcile import (
+    PositionReconciliationItem,
+    PositionReconciliationResult,
+    reconcile_positions,
+    render_position_reconciliation_markdown,
+)
 from trading.submitter import LiveOrderSubmitter, OrderSubmitResult, PaperOrderSubmitter
 from trading.sync import BrokerSyncResult, sync_broker_executions
 
 __all__ = [
     "BrokerFill",
+    "BrokerFillApplication",
     "BrokerOrder",
+    "BrokerOrderApplication",
     "BrokerOrderStatus",
     "BrokerSyncResult",
     "TradingCycleResult",
@@ -37,8 +47,12 @@ __all__ = [
     "PaperOrderSubmitter",
     "PreTradeCheck",
     "PreTradeResult",
+    "PositionReconciliationItem",
+    "PositionReconciliationResult",
     "TradeExecutionRepository",
+    "reconcile_positions",
     "render_pre_trade_markdown",
+    "render_position_reconciliation_markdown",
     "run_pre_trade",
     "run_trading_cycle",
     "sync_broker_executions",

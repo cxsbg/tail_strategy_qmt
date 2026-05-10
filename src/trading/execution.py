@@ -63,6 +63,18 @@ class BrokerOrderApplication:
     created_at: str | None
 
 
+@dataclass(frozen=True)
+class BrokerFillApplication:
+    id: int | None
+    fill_id: int
+    broker_order_id: str | None
+    symbol: str
+    side: str
+    status: str
+    message: str | None
+    created_at: str | None
+
+
 class TradeExecutionRepository:
     def __init__(self, store: SQLiteStore | str | Path) -> None:
         self.store = store if isinstance(store, SQLiteStore) else SQLiteStore(store)
@@ -179,6 +191,42 @@ class TradeExecutionRepository:
             ).fetchone()
             return int(row["id"])
 
+    def get_fill_application(self, fill_id: int) -> BrokerFillApplication | None:
+        with self.store.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM broker_fill_applications WHERE fill_id = ?",
+                (fill_id,),
+            ).fetchone()
+        return _row_to_fill_application(row) if row else None
+
+    def insert_fill_application(self, application: BrokerFillApplication) -> int:
+        sql = """
+        INSERT INTO broker_fill_applications (
+            fill_id, broker_order_id, symbol, side, status, message, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(fill_id) DO UPDATE SET
+            broker_order_id = excluded.broker_order_id,
+            symbol = excluded.symbol,
+            side = excluded.side,
+            status = excluded.status,
+            message = excluded.message,
+            created_at = excluded.created_at
+        """
+        with self.store.connect() as conn:
+            conn.execute(sql, _fill_application_values(application))
+            conn.commit()
+            row = conn.execute(
+                "SELECT id FROM broker_fill_applications WHERE fill_id = ?",
+                (application.fill_id,),
+            ).fetchone()
+            return int(row["id"])
+
+    def list_fill_applications(self) -> list[BrokerFillApplication]:
+        with self.store.connect() as conn:
+            rows = conn.execute("SELECT * FROM broker_fill_applications ORDER BY id").fetchall()
+        return [_row_to_fill_application(row) for row in rows]
+
     def list_orders(
         self,
         *,
@@ -289,6 +337,18 @@ def _application_values(application: BrokerOrderApplication) -> tuple[object, ..
     )
 
 
+def _fill_application_values(application: BrokerFillApplication) -> tuple[object, ...]:
+    return (
+        application.fill_id,
+        application.broker_order_id,
+        application.symbol,
+        application.side,
+        application.status,
+        application.message,
+        application.created_at,
+    )
+
+
 def _row_to_order(row: object) -> BrokerOrder:
     return BrokerOrder(
         id=row["id"],
@@ -329,6 +389,19 @@ def _row_to_fill(row: object) -> BrokerFill:
 def _row_to_application(row: object) -> BrokerOrderApplication:
     return BrokerOrderApplication(
         id=row["id"],
+        broker_order_id=row["broker_order_id"],
+        symbol=row["symbol"],
+        side=row["side"],
+        status=row["status"],
+        message=row["message"],
+        created_at=row["created_at"],
+    )
+
+
+def _row_to_fill_application(row: object) -> BrokerFillApplication:
+    return BrokerFillApplication(
+        id=row["id"],
+        fill_id=row["fill_id"],
         broker_order_id=row["broker_order_id"],
         symbol=row["symbol"],
         side=row["side"],

@@ -401,9 +401,25 @@ python -m scripts.run_trading_cycle --date 20260508 --no-submit
 broker_orders
 broker_fills
 broker_order_applications
+broker_fill_applications
 ```
 
-当前版本已经支持把 `READY` 订单接到 QMT live 提交器，并同步委托/成交回报；更细的部分成交处理和成交后复核仍可继续增强。
+当前版本已经支持把 `READY` 订单接到 QMT live 提交器，并同步委托/成交回报。开启 `--apply-positions` 后，成交会按 `broker_fills` 逐笔增量应用到本地持仓，支持 `PARTIAL_FILLED` 和 `FILLED` 两种状态；`broker_fill_applications` 用于保证同一笔成交不会重复开仓、加仓或减仓。
+
+成交后可以复核本地持仓和 QMT 当前持仓是否一致：
+
+```powershell
+conda activate stock
+python -m scripts.reconcile_positions
+```
+
+默认输出：
+
+```text
+outputs/position_reconciliation.md
+```
+
+复核逻辑当前以“本地是否有未关闭持仓、QMT 是否有对应持仓”为主：两边都有则 `MATCH`，本地有但券商无则 `MISSING_BROKER`，券商有但本地无则 `MISSING_LOCAL`。仓位比例和券商股数单位不同，后续如接入账户总资产和实时市值，可再做更严格的比例偏差校验。
 
 ## 应用决策到本地持仓
 
@@ -546,4 +562,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议增强部分成交处理、成交后资金/持仓复核，以及增加交易循环运行报告。
+下一步建议增强交易循环调度、运行监控告警，以及在真实 QMT 环境做一次小资金/纸面账户的端到端演练。

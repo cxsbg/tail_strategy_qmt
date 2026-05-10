@@ -138,6 +138,42 @@ class PositionService:
         )
         return updated
 
+    def increase_position_from_fill(
+        self,
+        position_id: int,
+        *,
+        add_ratio: float,
+        price: float,
+        trade_date: str,
+        trade_time: str | None = None,
+        reason: str | None = None,
+    ) -> Position:
+        position = self._require_position(position_id)
+        if add_ratio <= 0:
+            raise PositionStateError("add_ratio must be positive.")
+        next_ratio = position.position_ratio + add_ratio
+        if next_ratio > position.max_position_ratio + 1e-9:
+            raise PositionStateError("Position ratio would exceed max_position_ratio.")
+
+        updated = replace(
+            position,
+            position_ratio=min(next_ratio, position.max_position_ratio),
+            status=PositionStatus.HOLD,
+            add_count=position.add_count + 1,
+            last_action=PositionAction.ADD.value,
+            updated_at=_now(),
+        )
+        self.repository.update_position(updated)
+        self._record_trade(
+            position=updated,
+            action=PositionAction.ADD,
+            trade_date=trade_date,
+            trade_time=trade_time,
+            price=price,
+            reason=reason,
+        )
+        return updated
+
     def reduce_position(
         self,
         position_id: int,

@@ -147,6 +147,104 @@ def test_sync_broker_executions_is_idempotent_for_fills_and_position_application
     assert len(repository.list_trades("000001.SZ")) == 1
 
 
+def test_sync_broker_executions_applies_partial_buy_fills_incrementally(tmp_path) -> None:
+    db_path = tmp_path / "tail_strategy.db"
+    parquet_root = tmp_path / "parquet"
+    _write_daily(parquet_root, "000001.SZ", closes=[10.0, 10.5])
+    _store_decision(db_path, _decision("000001.SZ", DecisionAction.OPEN_POSITION, ratio=0.15))
+    run_pre_trade(
+        db_path=db_path,
+        parquet_root=parquet_root,
+        strategy_config=_strategy_config(mode="live") | {
+            "trading": _strategy_config(mode="live")["trading"] | {"account_equity": 100000.0}
+        },
+        trade_date="20260508",
+        strategy_version="test-rule",
+        report_path=None,
+        trader=_FakeTrader(),
+    )
+
+    first = sync_broker_executions(
+        db_path=db_path,
+        trader=_FakeTrader(
+            orders=[
+                QmtOrderSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.BUY,
+                    status=QmtOrderStatus.PARTIAL_FILLED,
+                    quantity=1400.0,
+                    traded_quantity=700.0,
+                    price=10.5,
+                )
+            ],
+            fills=[
+                QmtFillSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.BUY,
+                    quantity=700.0,
+                    price=10.5,
+                    fill_date="20260508",
+                    fill_time="14:30:00",
+                )
+            ],
+        ),
+        trade_date="20260508",
+        apply_positions=True,
+        strategy_version="test-rule",
+    )
+    second = sync_broker_executions(
+        db_path=db_path,
+        trader=_FakeTrader(
+            orders=[
+                QmtOrderSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.BUY,
+                    status=QmtOrderStatus.FILLED,
+                    quantity=1400.0,
+                    traded_quantity=1400.0,
+                    price=10.6,
+                )
+            ],
+            fills=[
+                QmtFillSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.BUY,
+                    quantity=700.0,
+                    price=10.5,
+                    fill_date="20260508",
+                    fill_time="14:30:00",
+                ),
+                QmtFillSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.BUY,
+                    quantity=700.0,
+                    price=10.6,
+                    fill_date="20260508",
+                    fill_time="14:50:00",
+                ),
+            ],
+        ),
+        trade_date="20260508",
+        apply_positions=True,
+        strategy_version="test-rule",
+    )
+
+    execution_repository = TradeExecutionRepository(db_path)
+    position = PositionRepository(db_path).get_open_position_by_symbol("000001.SZ")
+    assert first.position_application_count == 1
+    assert second.fill_inserted_count == 1
+    assert second.position_application_count == 1
+    assert position is not None
+    assert round(position.position_ratio, 6) == 0.15
+    assert len(PositionRepository(db_path).list_trades("000001.SZ")) == 2
+    assert len(execution_repository.list_fill_applications()) == 2
+
+
 def test_sync_broker_executions_closes_position_on_filled_sell(tmp_path) -> None:
     db_path = tmp_path / "tail_strategy.db"
     parquet_root = tmp_path / "parquet"
@@ -216,6 +314,117 @@ def test_sync_broker_executions_closes_position_on_filled_sell(tmp_path) -> None
     assert result.position_application_count == 1
     assert updated.status == PositionStatus.CLOSED
     assert repository.list_trades("000001.SZ")[-1].action == PositionAction.REDUCE
+
+
+def test_sync_broker_executions_applies_partial_sell_fills_incrementally(tmp_path) -> None:
+    db_path = tmp_path / "tail_strategy.db"
+    parquet_root = tmp_path / "parquet"
+    _write_daily(parquet_root, "000001.SZ", closes=[10.0, 9.8])
+    position = PositionService(PositionRepository(db_path), strategy_version="test-rule").open_position(
+        symbol="000001.SZ",
+        entry_date="20260507",
+        entry_price=10.0,
+        position_ratio=0.15,
+        max_position_ratio=0.15,
+    )
+    _store_decision(
+        db_path,
+        _decision("000001.SZ", DecisionAction.REDUCE_POSITION, ratio=0.0, position_id=position.id),
+    )
+    run_pre_trade(
+        db_path=db_path,
+        parquet_root=parquet_root,
+        strategy_config=_strategy_config(mode="live"),
+        trade_date="20260508",
+        strategy_version="test-rule",
+        report_path=None,
+        trader=_FakeTrader(
+            positions=[
+                QmtPositionSnapshot(
+                    symbol="000001.SZ",
+                    quantity=700.0,
+                    available_quantity=700.0,
+                )
+            ]
+        ),
+    )
+
+    first = sync_broker_executions(
+        db_path=db_path,
+        trader=_FakeTrader(
+            orders=[
+                QmtOrderSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.SELL,
+                    status=QmtOrderStatus.PARTIAL_FILLED,
+                    quantity=700.0,
+                    traded_quantity=350.0,
+                    price=9.8,
+                )
+            ],
+            fills=[
+                QmtFillSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.SELL,
+                    quantity=350.0,
+                    price=9.8,
+                    fill_date="20260508",
+                    fill_time="14:30:00",
+                )
+            ],
+        ),
+        trade_date="20260508",
+        apply_positions=True,
+        strategy_version="test-rule",
+    )
+    second = sync_broker_executions(
+        db_path=db_path,
+        trader=_FakeTrader(
+            orders=[
+                QmtOrderSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.SELL,
+                    status=QmtOrderStatus.FILLED,
+                    quantity=700.0,
+                    traded_quantity=700.0,
+                    price=9.7,
+                )
+            ],
+            fills=[
+                QmtFillSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.SELL,
+                    quantity=350.0,
+                    price=9.8,
+                    fill_date="20260508",
+                    fill_time="14:30:00",
+                ),
+                QmtFillSnapshot(
+                    broker_order_id="live-1",
+                    symbol="000001.SZ",
+                    side=QmtOrderSide.SELL,
+                    quantity=350.0,
+                    price=9.7,
+                    fill_date="20260508",
+                    fill_time="14:50:00",
+                ),
+            ],
+        ),
+        trade_date="20260508",
+        apply_positions=True,
+        strategy_version="test-rule",
+    )
+
+    repository = PositionRepository(db_path)
+    updated = repository.get_position(position.id)
+    assert first.position_application_count == 1
+    assert second.position_application_count == 1
+    assert updated.status == PositionStatus.CLOSED
+    assert round(updated.position_ratio, 6) == 0.0
 
 
 def _strategy_config(*, mode: str = "paper") -> dict[str, object]:
