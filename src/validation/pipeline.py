@@ -164,6 +164,8 @@ def _validate_backtest_outputs(*, paths: dict[str, Path]) -> list[ValidationChec
         _file_nonempty_check(paths["backtest_summary"], "backtest_summary", required=False),
         _file_nonempty_check(paths["backtest_report"], "backtest_report", required=False),
         _file_nonempty_check(paths["backtest_equity_curve"], "backtest_equity_curve", required=False),
+        _file_nonempty_check(paths["backtest_sweep"], "backtest_sweep", required=False),
+        _file_nonempty_check(paths["backtest_sweep_report"], "backtest_sweep_report", required=False),
     ]
 
 
@@ -255,6 +257,8 @@ def _default_paths() -> dict[str, Path]:
         "backtest_summary": Path("outputs/backtest_summary.csv"),
         "backtest_report": Path("outputs/backtest_report.md"),
         "backtest_equity_curve": Path("outputs/backtest_equity_curve.csv"),
+        "backtest_sweep": Path("outputs/backtest_sweep.csv"),
+        "backtest_sweep_report": Path("outputs/backtest_sweep_report.md"),
     }
 
 

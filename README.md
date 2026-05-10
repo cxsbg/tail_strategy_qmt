@@ -364,6 +364,7 @@ python -m scripts.run_backtest_sweep --start-date 20240101 --end-date 20260508
 
 ```text
 outputs/backtest_sweep.csv
+outputs/backtest_sweep_report.md
 ```
 
 也可以手动指定参数网格：
@@ -372,7 +373,7 @@ outputs/backtest_sweep.csv
 python -m scripts.run_backtest_sweep --holding-days 3,5,8 --stop-loss 0.03,0.05 --take-profit 0.08,0.12 --max-gross-exposure 0.6,0.8,1.0
 ```
 
-扫描结果会按 `score`、`compounded_return`、`max_drawdown` 和 `win_rate` 排序。`score` 是一个简单综合评分，只用于快速筛选参数组合，最终仍建议看交易数、回撤和收益稳定性。
+扫描结果会按 `score`、`compounded_return`、`max_drawdown` 和 `win_rate` 排序。`score` 是一个简单综合评分，只用于快速筛选参数组合，最终仍建议看交易数、回撤和收益稳定性。Markdown 摘要会列出最佳参数和 Top 组合，方便直接查看。
 
 ## 全流程体检
 
@@ -414,13 +415,13 @@ outputs/pipeline_validation.md
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
 - `scripts/apply_decisions.py`：把风控决策应用到本地持仓状态机。
 - `scripts/run_backtest.py`：基于风控决策和本地日线缓存运行轻量回测。
-- `scripts/run_backtest_sweep.py`：批量扫描回测参数组合。
+- `scripts/run_backtest_sweep.py`：批量扫描回测参数组合并生成 Markdown 摘要。
 - `scripts/validate_pipeline.py`：检查本地全流程产物和 SQLite 状态。
 - `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
 - `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
 - `src/strategy/apply_decisions.py`：决策应用、幂等记录和持仓状态机衔接。
 - `src/backtest/simple.py`：轻量决策回测引擎。
-- `src/backtest/sweep.py`：回测参数扫描。
+- `src/backtest/sweep.py`：回测参数扫描和摘要报告渲染。
 - `src/validation/pipeline.py`：本地流水线产物体检。
 - `src/reports/decisions.py`：生成面向人工查看的操作建议报告。
 - `src/position/models.py`：持仓状态、动作和交易记录模型。
@@ -429,4 +430,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议把参数扫描结果做成 Markdown 摘要报告，并继续完善真实 QMT 下单前的风控确认。自动交易仍建议最后再接。
+下一步建议继续完善真实 QMT 下单前的人工确认、订单草稿和风控闸门。自动交易仍建议最后再接。

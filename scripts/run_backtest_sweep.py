@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run parameter sweep for decision-based backtest.")
     parser.add_argument("--decisions", default="data/processed/decisions.parquet")
     parser.add_argument("--output", default="outputs/backtest_sweep.csv")
+    parser.add_argument("--report-output", default="outputs/backtest_sweep_report.md")
     parser.add_argument("--data-config", default="config/data_source.yaml")
     parser.add_argument("--strategy-config", default="config/strategy.yaml")
     parser.add_argument("--holding-days", default="3,5,8", help="Comma separated holding days.")
@@ -39,6 +40,7 @@ def main() -> None:
         decisions_path=args.decisions,
         parquet_root=data_config["storage"]["parquet_root"],
         output_path=args.output,
+        report_path=args.report_output,
         base_config=strategy_config.get("backtest", {}),
         holding_days_values=_int_values(args.holding_days),
         stop_loss_values=_float_values(args.stop_loss),
@@ -48,10 +50,11 @@ def main() -> None:
         end_date=args.end_date,
     )
     logger.info(
-        "Backtest sweep finished: runs=%s best_score=%s output=%s",
+        "Backtest sweep finished: runs=%s best_score=%s output=%s report=%s",
         result.run_count,
         result.best_score,
         result.output_path,
+        result.report_path,
     )
 
 

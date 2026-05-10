@@ -144,6 +144,8 @@ def _write_reports(outputs) -> None:
         "backtest_summary.csv",
         "backtest_report.md",
         "backtest_equity_curve.csv",
+        "backtest_sweep.csv",
+        "backtest_sweep_report.md",
     ]:
         (outputs / name).write_text("ok", encoding="utf-8")
 
@@ -178,6 +180,8 @@ def _paths(processed, outputs):
         "backtest_summary": outputs / "backtest_summary.csv",
         "backtest_report": outputs / "backtest_report.md",
         "backtest_equity_curve": outputs / "backtest_equity_curve.csv",
+        "backtest_sweep": outputs / "backtest_sweep.csv",
+        "backtest_sweep_report": outputs / "backtest_sweep_report.md",
     }
 
 

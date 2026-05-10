@@ -32,6 +32,7 @@ SWEEP_COLUMNS = [
 @dataclass(frozen=True)
 class BacktestSweepResult:
     output_path: Path
+    report_path: Path | None
     run_count: int
     best_score: float | None
 
@@ -99,6 +100,7 @@ def build_backtest_sweep(
     decisions_path: str | Path,
     parquet_root: str | Path,
     output_path: str | Path,
+    report_path: str | Path | None = None,
     base_config: dict[str, Any],
     holding_days_values: Iterable[int],
     stop_loss_values: Iterable[float],
@@ -127,8 +129,91 @@ def build_backtest_sweep(
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(path, index=False, encoding="utf-8")
+    markdown_path = Path(report_path) if report_path is not None else None
+    if markdown_path is not None:
+        markdown_path.parent.mkdir(parents=True, exist_ok=True)
+        markdown_path.write_text(render_backtest_sweep_markdown(result), encoding="utf-8")
     best_score = None if result.empty else float(result.iloc[0]["score"])
-    return BacktestSweepResult(output_path=path, run_count=len(result), best_score=best_score)
+    return BacktestSweepResult(
+        output_path=path,
+        report_path=markdown_path,
+        run_count=len(result),
+        best_score=best_score,
+    )
+
+
+def render_backtest_sweep_markdown(sweep: object, *, top_n: int = 10) -> str:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise StorageError("pandas is required to render backtest sweep reports.") from exc
+
+    if not isinstance(sweep, pd.DataFrame):
+        raise StorageError("render_backtest_sweep_markdown expects a pandas DataFrame.")
+
+    lines = [
+        "# Backtest Parameter Sweep",
+        "",
+        "## Summary",
+        "",
+    ]
+    if sweep.empty:
+        lines.extend(["- Runs: 0", "", "No sweep rows were generated.", ""])
+        return "\n".join(lines)
+
+    best = sweep.iloc[0]
+    lines.extend(
+        [
+            f"- Runs: {len(sweep)}",
+            f"- Best score: {_fmt_float(best['score'])}",
+            f"- Best compounded return: {_fmt_pct(best['compounded_return'])}",
+            f"- Best max drawdown: {_fmt_pct(best['max_drawdown'])}",
+            f"- Best trade count: {int(best['trade_count'])}",
+            "",
+            "## Best Parameters",
+            "",
+            "| Metric | Value |",
+            "|---|---:|",
+            f"| holding_days | {int(best['holding_days'])} |",
+            f"| stop_loss_pct | {_fmt_pct(best['stop_loss_pct'])} |",
+            f"| take_profit_pct | {_fmt_pct(best['take_profit_pct'])} |",
+            f"| max_gross_exposure | {_fmt_pct(best['max_gross_exposure'])} |",
+            "",
+            "## Top Runs",
+            "",
+            "| Rank | Holding | Stop Loss | Take Profit | Max Exposure | Trades | Win Rate | Return | Drawdown | Score |",
+            "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+
+    columns = [
+        "holding_days",
+        "stop_loss_pct",
+        "take_profit_pct",
+        "max_gross_exposure",
+        "trade_count",
+        "win_rate",
+        "compounded_return",
+        "max_drawdown",
+        "score",
+    ]
+    for rank, (_, row) in enumerate(sweep.head(top_n)[columns].iterrows(), start=1):
+        lines.append(
+            "| {rank} | {holding} | {stop} | {take} | {exposure} | {trades} | {win} | {ret} | {dd} | {score} |".format(
+                rank=rank,
+                holding=int(row["holding_days"]),
+                stop=_fmt_pct(row["stop_loss_pct"]),
+                take=_fmt_pct(row["take_profit_pct"]),
+                exposure=_fmt_pct(row["max_gross_exposure"]),
+                trades=int(row["trade_count"]),
+                win=_fmt_pct(row["win_rate"]),
+                ret=_fmt_pct(row["compounded_return"]),
+                dd=_fmt_pct(row["max_drawdown"]),
+                score=_fmt_float(row["score"]),
+            )
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _run_one(
@@ -173,3 +258,11 @@ def _score_summary(summary: dict[str, object]) -> float:
     if trade_count == 0:
         return -999.0
     return round(compounded - drawdown * 0.5 + win_rate * 0.05, 6)
+
+
+def _fmt_float(value: object) -> str:
+    return f"{float(value):.6f}"
+
+
+def _fmt_pct(value: object) -> str:
+    return f"{float(value) * 100:.2f}%"
