@@ -1,5 +1,34 @@
 # tail_strategy_qmt
 
+## Intraday Polling Monitor
+
+The tail strategy should run during the trading session, not only after market close:
+
+- `09:30-14:30`: sell/position window, polling every 60 seconds by default.
+- `14:30-14:50`: tail confirmation window, polling every 30 seconds by default.
+- `14:50-15:01`: execution window, running the trading cycle once and then syncing broker feedback.
+
+Safe rehearsal:
+
+```powershell
+conda activate stock
+python -m scripts.run_intraday_monitor --max-iterations 1
+```
+
+Live mode, after filling `config/strategy.live.yaml`:
+
+```powershell
+python -m scripts.run_intraday_monitor --strategy-config config/strategy.live.yaml --submit --apply-positions
+```
+
+Default report:
+
+```text
+outputs/intraday_monitor_report.md
+```
+
+The Web console also has an intraday monitor rehearsal action. It runs one polling iteration and does not submit live orders.
+
 基于国金 QMT / xtquant 的 A 股尾盘趋势确认策略辅助系统。
 
 当前仓库已落地项目骨架、QMT 数据接入、本地 Parquet 缓存、SQLite、股票池、日线特征、规则候选、尾盘分钟线确认、信号落库、基础风控决策、每日报告流水线、基础持仓状态机、轻量离线回测、自动下单前风控闸门、QMT 自动委托边界、交易循环监控和机器学习研究数据集。

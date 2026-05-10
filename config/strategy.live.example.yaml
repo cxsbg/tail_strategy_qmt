@@ -62,6 +62,16 @@ trading:
     account_id: "YOUR_ACCOUNT_ID"
     session_id: 1
 
+monitor:
+  enabled: true
+  sell_start_time: "09:30"
+  tail_start_time: "14:30"
+  order_start_time: "14:50"
+  stop_time: "15:01"
+  sell_poll_seconds: 60
+  tail_poll_seconds: 30
+  execution_poll_seconds: 10
+
 backtest:
   initial_equity: 1.0
   holding_days: 5

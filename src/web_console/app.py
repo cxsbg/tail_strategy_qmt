@@ -88,6 +88,7 @@ _REPORTS = {
     "health": Path("outputs/trading_run_health.md"),
     "position_reconciliation": Path("outputs/position_reconciliation.md"),
     "trading_cycle": Path("outputs/trading_cycle_report.md"),
+    "intraday_monitor": Path("outputs/intraday_monitor_report.md"),
 }
 
 
@@ -144,6 +145,7 @@ _HTML = """
         <button onclick="loadReport('run_monitor')">运行监控</button>
         <button onclick="loadReport('health')">健康检查</button>
         <button onclick="loadReport('trading_cycle')">交易循环</button>
+        <button onclick="loadReport('intraday_monitor')">盘中监控</button>
       </div>
       <pre id="report">选择一个报告查看内容。</pre>
     </section>
