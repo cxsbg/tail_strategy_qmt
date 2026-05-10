@@ -7,9 +7,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from position import PositionRepository
+from qmt.trader import QmtTrader
 from storage.parquet import ParquetStorage
 from storage.sqlite import SQLiteStore
 from strategy.decisions import DecisionAction, DecisionRepository, StrategyDecision
+from trading.execution import TradeExecutionRepository
+from trading.submitter import LiveOrderSubmitter, PaperOrderSubmitter
 from utils.exceptions import StorageError
 
 
@@ -22,6 +25,8 @@ class OrderStatus(str, Enum):
     READY = "READY"
     BLOCKED = "BLOCKED"
     PAPER_SUBMITTED = "PAPER_SUBMITTED"
+    SUBMITTED = "SUBMITTED"
+    REJECTED = "REJECTED"
     ALREADY_SUBMITTED = "ALREADY_SUBMITTED"
 
 
@@ -68,6 +73,8 @@ class PreTradeResult:
     blocked_count: int
     skipped_count: int
     paper_submitted_count: int
+    submitted_count: int
+    rejected_count: int
     already_submitted_count: int
     report_path: Path | None
     db_path: Path
@@ -178,9 +185,11 @@ def run_pre_trade(
     strategy_version: str = "rule-v0",
     report_path: str | Path | None = "outputs/pre_trade_report.md",
     submit: bool = True,
+    trader: QmtTrader | None = None,
 ) -> PreTradeResult:
     decision_repository = DecisionRepository(db_path)
     draft_repository = OrderDraftRepository(db_path)
+    execution_repository = TradeExecutionRepository(db_path)
     position_repository = PositionRepository(db_path)
     storage = ParquetStorage(parquet_root)
     trading_config = _trading_config(strategy_config)
@@ -202,7 +211,7 @@ def run_pre_trade(
             continue
 
         existing = draft_repository.get_by_decision_id(decision.id)
-        if existing is not None and existing.status == OrderStatus.PAPER_SUBMITTED:
+        if existing is not None and existing.status in {OrderStatus.PAPER_SUBMITTED, OrderStatus.SUBMITTED}:
             already_submitted_count += 1
             continue
 
@@ -245,10 +254,16 @@ def run_pre_trade(
                 for check in checks
             ],
         )
-        if submit and saved_draft.status == OrderStatus.READY and trading_config["mode"] == "paper":
+        if submit and saved_draft.status == OrderStatus.READY:
+            submit_result = _submitter(
+                mode=str(trading_config["mode"]),
+                execution_repository=execution_repository,
+                trading_config=trading_config,
+                trader=trader,
+            ).submit(saved_draft)
             draft_repository.update_status(
-                order_id,
-                status=OrderStatus.PAPER_SUBMITTED,
+                saved_draft.id,
+                status=OrderStatus(submit_result.status),
                 submitted_at=_now(),
             )
 
@@ -274,6 +289,8 @@ def run_pre_trade(
         blocked_count=_count_status(drafts, OrderStatus.BLOCKED),
         skipped_count=skipped_count,
         paper_submitted_count=_count_status(drafts, OrderStatus.PAPER_SUBMITTED),
+        submitted_count=_count_status(drafts, OrderStatus.SUBMITTED),
+        rejected_count=_count_status(drafts, OrderStatus.REJECTED),
         already_submitted_count=already_submitted_count,
         report_path=markdown_path,
         db_path=Path(db_path),
@@ -299,6 +316,8 @@ def render_pre_trade_markdown(
         f"- Ready: {_count_status(draft_list, OrderStatus.READY)}",
         f"- Blocked: {_count_status(draft_list, OrderStatus.BLOCKED)}",
         f"- Paper submitted: {_count_status(draft_list, OrderStatus.PAPER_SUBMITTED)}",
+        f"- Submitted: {_count_status(draft_list, OrderStatus.SUBMITTED)}",
+        f"- Rejected: {_count_status(draft_list, OrderStatus.REJECTED)}",
         "",
         "## Orders",
         "",
@@ -551,7 +570,33 @@ def _trading_config(strategy_config: dict[str, Any]) -> dict[str, Any]:
         "block_if_price_limit": bool(trading_config.get("block_if_price_limit", True)),
         "limit_up_pct": float(trading_config.get("limit_up_pct", 0.098)),
         "limit_down_pct": float(trading_config.get("limit_down_pct", 0.098)),
+        "order_value_base": trading_config.get("order_value_base"),
+        "account_equity": trading_config.get("account_equity"),
+        "order_lot_size": int(trading_config.get("order_lot_size", 100)),
+        "strategy_name": str(trading_config.get("strategy_name", "tail_strategy_qmt")),
     }
+
+
+def _submitter(
+    *,
+    mode: str,
+    execution_repository: TradeExecutionRepository,
+    trading_config: dict[str, Any],
+    trader: QmtTrader | None,
+) -> PaperOrderSubmitter | LiveOrderSubmitter:
+    if mode == "paper":
+        return PaperOrderSubmitter(
+            execution_repository=execution_repository,
+        )
+    if mode == "live":
+        if trader is None:
+            raise ValueError("A QmtTrader is required when trading.mode is live.")
+        return LiveOrderSubmitter(
+            trader=trader,
+            execution_repository=execution_repository,
+            trading_config=trading_config,
+        )
+    raise ValueError(f"Unsupported trading.mode: {mode}")
 
 
 def _check(

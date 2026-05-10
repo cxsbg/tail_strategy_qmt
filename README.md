@@ -302,7 +302,7 @@ data/database/tail_strategy.db
 
 ## 下单前自动风控
 
-生成 `decisions` 后，可以自动生成订单草稿、执行下单前风控，并在 `paper` 模式下模拟提交通过的订单：
+生成 `decisions` 后，可以自动生成订单草稿、执行下单前风控，并提交通过的订单。默认 `trading.mode: paper`，只模拟提交：
 
 ```powershell
 conda activate stock
@@ -316,13 +316,26 @@ data/database/tail_strategy.db
 outputs/pre_trade_report.md
 ```
 
-风控闸门会自动检查重复持仓、单笔仓位、组合总仓位、持仓数量、涨跌停和行情缺失等条件。通过的订单在 `trading.mode: paper` 下会标记为 `PAPER_SUBMITTED`；被拦截的订单会标记为 `BLOCKED` 并记录原因。重复运行不会重复提交已经 paper submitted 的订单。
+风控闸门会自动检查重复持仓、单笔仓位、组合总仓位、持仓数量、涨跌停和行情缺失等条件。通过的订单在 `paper` 模式下会标记为 `PAPER_SUBMITTED`；在 `live` 模式下会调用 QMT 交易适配器并标记为 `SUBMITTED` 或 `REJECTED`，同时写入 `broker_orders`。被拦截的订单会标记为 `BLOCKED` 并记录原因。重复运行不会重复提交已经提交过的订单。
 
 如只想生成订单草稿和检查结果，不模拟提交：
 
 ```powershell
 python -m scripts.run_pre_trade --date 20260508 --no-submit
 ```
+
+切换真实委托前，需要在 `config/strategy.yaml` 设置：
+
+```yaml
+trading:
+  mode: live
+  order_value_base: 100000
+  qmt:
+    trader_path: "QMT userdata path"
+    account_id: "your account id"
+```
+
+`BUY` 委托数量会按 `order_value_base * position_ratio / reference_price` 计算并按 100 股取整；`SELL` 委托会读取 QMT 持仓可用数量。建议先保留 `mode: paper` 跑通报告和状态，再切 `live`。
 
 ## QMT 交易接口边界
 
@@ -335,7 +348,7 @@ broker_orders
 broker_fills
 ```
 
-当前版本先提供接口边界和落库结构，`paper` 提交仍是默认模式；下一步才会把 `READY` 订单真正接到 QMT live 提交器。
+当前版本已经支持把 `READY` 订单接到 QMT live 提交器；成交查询和本地持仓按成交回写仍在下一步完善。
 
 ## 应用决策到本地持仓
 
@@ -453,7 +466,7 @@ outputs/pipeline_validation.md
 - `scripts/build_tail_confirmation.py`：从分钟线缓存生成尾盘确认结果。
 - `scripts/build_signals.py`：从候选股和尾盘确认生成信号并写入 SQLite。
 - `scripts/build_decisions.py`：从信号和当前持仓生成每日风控决策。
-- `scripts/run_pre_trade.py`：生成订单草稿、执行下单前风控并在 paper 模式模拟提交。
+- `scripts/run_pre_trade.py`：生成订单草稿、执行下单前风控，并按 paper/live 模式提交。
 - `scripts/apply_decisions.py`：把风控决策应用到本地持仓状态机。
 - `scripts/run_backtest.py`：基于风控决策和本地日线缓存运行轻量回测。
 - `scripts/run_backtest_sweep.py`：批量扫描回测参数组合并生成 Markdown 摘要。
@@ -461,7 +474,8 @@ outputs/pipeline_validation.md
 - `src/strategy/signals.py`：信号构建、建议动作和信号 SQLite 仓储。
 - `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
 - `src/strategy/apply_decisions.py`：决策应用、幂等记录和持仓状态机衔接。
-- `src/trading/pre_trade.py`：订单草稿、自动风控闸门和 paper 提交流程。
+- `src/trading/pre_trade.py`：订单草稿、自动风控闸门和提交编排。
+- `src/trading/submitter.py`：paper/live 订单提交器。
 - `src/trading/execution.py`：券商委托和成交 SQLite 仓储。
 - `src/backtest/simple.py`：轻量决策回测引擎。
 - `src/backtest/sweep.py`：回测参数扫描和摘要报告渲染。
@@ -473,4 +487,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议实现 live 提交器，把 `PAPER_SUBMITTED` 流程切换为真实 QMT 委托、成交回报和本地持仓回写。
+下一步建议实现 QMT 委托/成交轮询，把 `broker_orders` 和 `broker_fills` 的回报自动同步，并按成交结果更新本地持仓。

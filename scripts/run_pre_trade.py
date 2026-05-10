@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Build and submit paper orders through the pre-trade risk gate.")
+    parser = argparse.ArgumentParser(description="Build and submit orders through the pre-trade risk gate.")
     parser.add_argument("--date", required=True, help="Trade date, for example 20260508.")
     parser.add_argument("--data-config", default="config/data_source.yaml")
     parser.add_argument("--strategy-config", default="config/strategy.yaml")
@@ -27,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-submit",
         action="store_true",
-        help="Build order drafts and checks without paper submitting READY orders.",
+        help="Build order drafts and checks without submitting READY orders.",
     )
     return parser
 
@@ -39,6 +39,7 @@ def main() -> None:
     strategy_config = load_config_file(Path(args.strategy_config))
     db_path = args.db_path or data_config["storage"]["sqlite_path"]
     parquet_root = args.parquet_root or data_config["storage"]["parquet_root"]
+    trader = _build_trader(strategy_config) if not args.no_submit else None
 
     result = run_pre_trade(
         db_path=db_path,
@@ -48,11 +49,12 @@ def main() -> None:
         strategy_version=args.strategy_version,
         report_path=args.report_output,
         submit=not args.no_submit,
+        trader=trader,
     )
     logger.info(
         (
             "Pre-trade finished: date=%s decisions=%s drafts=%s ready=%s blocked=%s "
-            "paper_submitted=%s already_submitted=%s report=%s db=%s"
+            "paper_submitted=%s submitted=%s rejected=%s already_submitted=%s report=%s db=%s"
         ),
         result.date,
         result.decision_count,
@@ -60,9 +62,34 @@ def main() -> None:
         result.ready_count,
         result.blocked_count,
         result.paper_submitted_count,
+        result.submitted_count,
+        result.rejected_count,
         result.already_submitted_count,
         result.report_path,
         result.db_path,
+    )
+
+
+def _build_trader(strategy_config: dict[str, object]) -> object | None:
+    trading_config = strategy_config.get("trading", {})
+    if not isinstance(trading_config, dict) or trading_config.get("mode", "paper") != "live":
+        return None
+
+    qmt_config = trading_config.get("qmt", {})
+    if not isinstance(qmt_config, dict):
+        raise SystemExit("trading.qmt config is required when trading.mode is live.")
+    trader_path = qmt_config.get("trader_path")
+    account_id = qmt_config.get("account_id")
+    if not trader_path or not account_id:
+        raise SystemExit("trading.qmt.trader_path and trading.qmt.account_id are required for live trading.")
+
+    from qmt.xtquant_trader_adapter import XtQuantTraderAdapter
+
+    return XtQuantTraderAdapter(
+        trader_path=str(trader_path),
+        account_id=str(account_id),
+        session_id=int(qmt_config.get("session_id", 1)),
+        strategy_name=str(trading_config.get("strategy_name", "tail_strategy_qmt")),
     )
 
 
