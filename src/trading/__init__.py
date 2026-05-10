@@ -9,6 +9,12 @@ from trading.execution import (
     TradeExecutionRepository,
 )
 from trading.cycle import TradingCycleResult, run_trading_cycle
+from trading.health import (
+    TradingRunHealthCheck,
+    TradingRunHealthResult,
+    check_trading_run_health,
+    render_trading_run_health_markdown,
+)
 from trading.pre_trade import (
     CheckStatus,
     OrderDraft,
@@ -56,10 +62,14 @@ __all__ = [
     "TradeExecutionRepository",
     "TradingCycleRun",
     "TradingCycleRunRepository",
+    "TradingRunHealthCheck",
+    "TradingRunHealthResult",
+    "check_trading_run_health",
     "reconcile_positions",
     "render_pre_trade_markdown",
     "render_position_reconciliation_markdown",
     "render_qmt_smoke_markdown",
+    "render_trading_run_health_markdown",
     "run_pre_trade",
     "run_qmt_smoke_test",
     "run_trading_cycle",

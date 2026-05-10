@@ -533,6 +533,24 @@ python -m scripts.run_trading_cycle_scheduled --skip-weekend --apply-positions -
 
 这个入口会在正常交易循环后自动刷新 `outputs/trading_run_monitor.md`；如果周末加了 `--skip-weekend`，会记录一条 `SKIPPED`，但不会下单。
 
+任务计划程序里还可以在交易循环后追加一个健康检查步骤，让失败状态直接反映成非零退出码：
+
+```powershell
+python -m scripts.check_trading_run_health --today --max-age-hours 12 --fail-on-warn
+```
+
+默认输出：
+
+```text
+outputs/trading_run_health.md
+```
+
+如果周末允许 `SKIPPED`，可以加：
+
+```powershell
+python -m scripts.check_trading_run_health --today --allow-skipped
+```
+
 ## QMT 实盘前 Smoke Test
 
 真正打开自动提交前，先跑安全检查。默认只检查配置、SQLite 和本地目录，不连接 QMT：
