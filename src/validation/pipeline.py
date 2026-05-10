@@ -112,6 +112,7 @@ def _validate_sqlite(*, sqlite_path: Path, trade_date: str) -> list[ValidationCh
         "broker_fills",
         "broker_order_applications",
         "broker_fill_applications",
+        "trading_cycle_runs",
         "data_sync_status",
     }
     try:
@@ -165,6 +166,7 @@ def _validate_reports(*, paths: dict[str, Path]) -> list[ValidationCheck]:
         _file_nonempty_check(paths["pre_trade_report"], "pre_trade_report", required=False),
         _file_nonempty_check(paths["trading_cycle_report"], "trading_cycle_report", required=False),
         _file_nonempty_check(paths["position_reconciliation_report"], "position_reconciliation_report", required=False),
+        _file_nonempty_check(paths["trading_run_monitor"], "trading_run_monitor", required=False),
     ]
 
 
@@ -266,6 +268,7 @@ def _default_paths() -> dict[str, Path]:
         "pre_trade_report": Path("outputs/pre_trade_report.md"),
         "trading_cycle_report": Path("outputs/trading_cycle_report.md"),
         "position_reconciliation_report": Path("outputs/position_reconciliation.md"),
+        "trading_run_monitor": Path("outputs/trading_run_monitor.md"),
         "backtest_summary": Path("outputs/backtest_summary.csv"),
         "backtest_report": Path("outputs/backtest_report.md"),
         "backtest_equity_curve": Path("outputs/backtest_equity_curve.csv"),

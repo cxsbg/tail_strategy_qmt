@@ -26,6 +26,7 @@ from trading.reconcile import (
     reconcile_positions,
     render_position_reconciliation_markdown,
 )
+from trading.run_log import TradingCycleRun, TradingCycleRunRepository
 from trading.submitter import LiveOrderSubmitter, OrderSubmitResult, PaperOrderSubmitter
 from trading.sync import BrokerSyncResult, sync_broker_executions
 
@@ -50,6 +51,8 @@ __all__ = [
     "PositionReconciliationItem",
     "PositionReconciliationResult",
     "TradeExecutionRepository",
+    "TradingCycleRun",
+    "TradingCycleRunRepository",
     "reconcile_positions",
     "render_pre_trade_markdown",
     "render_position_reconciliation_markdown",

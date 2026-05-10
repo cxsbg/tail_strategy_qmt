@@ -7,6 +7,7 @@ from strategy.decisions import DecisionAction, DecisionRepository, StrategyDecis
 from trading.execution import TradeExecutionRepository
 from trading.pre_trade import OrderDraftRepository, OrderStatus
 from trading.cycle import run_trading_cycle
+from trading.run_log import TradingCycleRunRepository
 
 
 def test_run_trading_cycle_paper_submits_without_broker_sync(tmp_path) -> None:
@@ -28,10 +29,12 @@ def test_run_trading_cycle_paper_submits_without_broker_sync(tmp_path) -> None:
     draft = OrderDraftRepository(db_path).list_drafts(trade_date="20260508")[0]
     assert result.pre_trade.paper_submitted_count == 1
     assert result.sync_count == 0
+    assert result.run_id is not None
     assert result.report_path.exists()
     assert "Trading Cycle Report" in result.report_path.read_text(encoding="utf-8")
     assert draft.status == OrderStatus.PAPER_SUBMITTED
     assert len(TradeExecutionRepository(db_path).list_orders(trade_date="20260508")) == 1
+    assert TradingCycleRunRepository(db_path).list_runs()[0].status == "SUCCESS"
 
 
 def test_run_trading_cycle_live_submits_syncs_and_applies_position(tmp_path) -> None:
@@ -59,6 +62,7 @@ def test_run_trading_cycle_live_submits_syncs_and_applies_position(tmp_path) -> 
     broker_order = TradeExecutionRepository(db_path).list_orders(trade_date="20260508")[0]
     assert result.pre_trade.submitted_count == 1
     assert result.sync_count == 1
+    assert result.run_id is not None
     assert result.total_fill_inserted_count == 1
     assert result.total_position_application_count == 1
     assert broker_order.status.value == "FILLED"
@@ -67,6 +71,7 @@ def test_run_trading_cycle_live_submits_syncs_and_applies_position(tmp_path) -> 
     assert "live-1" in markdown
     assert position is not None
     assert position.entry_price == 10.5
+    assert TradingCycleRunRepository(db_path).list_runs()[0].fill_inserted_count == 1
 
 
 def test_run_trading_cycle_live_can_skip_sync(tmp_path) -> None:
@@ -93,6 +98,28 @@ def test_run_trading_cycle_live_can_skip_sync(tmp_path) -> None:
     assert result.sync_count == 0
     assert result.report_path is None
     assert PositionRepository(db_path).list_open_positions() == []
+
+
+def test_run_trading_cycle_records_failure(tmp_path) -> None:
+    db_path = tmp_path / "tail_strategy.db"
+
+    try:
+        run_trading_cycle(
+            db_path=db_path,
+            parquet_root=tmp_path / "missing_parquet",
+            strategy_config=_strategy_config(mode="live"),
+            trade_date="20260508",
+            strategy_version="test-rule",
+            report_path=None,
+            cycle_report_path=None,
+            trader=None,
+        )
+    except ValueError:
+        pass
+
+    runs = TradingCycleRunRepository(db_path).list_runs()
+    assert runs[0].status == "FAILED"
+    assert "QmtTrader" in runs[0].message
 
 
 def _strategy_config(*, mode: str) -> dict[str, object]:

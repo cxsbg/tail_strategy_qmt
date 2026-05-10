@@ -176,6 +176,27 @@ SCHEMA: tuple[str, ...] = (
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS trading_cycle_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trade_date TEXT NOT NULL,
+        strategy_version TEXT,
+        mode TEXT,
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        duration_seconds REAL,
+        draft_count INTEGER DEFAULT 0,
+        blocked_count INTEGER DEFAULT 0,
+        submitted_count INTEGER DEFAULT 0,
+        rejected_count INTEGER DEFAULT 0,
+        sync_count INTEGER DEFAULT 0,
+        fill_inserted_count INTEGER DEFAULT 0,
+        position_application_count INTEGER DEFAULT 0,
+        report_path TEXT,
+        message TEXT
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS data_sync_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT NOT NULL,

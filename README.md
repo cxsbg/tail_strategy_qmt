@@ -497,6 +497,42 @@ python -m scripts.run_backtest_sweep --holding-days 3,5,8 --stop-loss 0.03,0.05 
 
 扫描结果会按 `score`、`compounded_return`、`max_drawdown` 和 `win_rate` 排序。`score` 是一个简单综合评分，只用于快速筛选参数组合，最终仍建议看交易数、回撤和收益稳定性。Markdown 摘要会列出最佳参数和 Top 组合，方便直接查看。
 
+## 交易循环调度与监控
+
+每次运行 `run_trading_cycle` 都会写入 SQLite 表：
+
+```text
+trading_cycle_runs
+```
+
+其中会记录运行日期、模式、状态、耗时、订单草稿数、提交数、回报同步次数、成交写入数和持仓回写数。可以随时生成最近运行监控报告：
+
+```powershell
+conda activate stock
+python -m scripts.build_trading_run_report
+```
+
+默认输出：
+
+```text
+outputs/trading_run_monitor.md
+```
+
+如果要交给 Windows 任务计划程序调用，建议使用 scheduled 入口，日期默认取当天：
+
+```powershell
+conda activate stock
+python -m scripts.run_trading_cycle_scheduled --skip-weekend --no-submit
+```
+
+实盘自动提交时去掉 `--no-submit`，并按需要开启：
+
+```powershell
+python -m scripts.run_trading_cycle_scheduled --skip-weekend --apply-positions --sync-attempts 3 --sync-interval-seconds 20
+```
+
+这个入口会在正常交易循环后自动刷新 `outputs/trading_run_monitor.md`；如果周末加了 `--skip-weekend`，会记录一条 `SKIPPED`，但不会下单。
+
 ## 全流程体检
 
 完整跑完数据、信号、决策、报告和回测后，可以生成一份本地体检报告：
