@@ -158,7 +158,9 @@ def _artifact_checks() -> list[ReadinessCheck]:
 
 def _required_text_check(name: str, value: object, *, detail: str | None = None) -> ReadinessCheck:
     text = str(value or "")
-    return _check(name, "PASS" if text else "FAIL", detail or text or "missing")
+    if text:
+        return _check(name, "PASS", detail or text)
+    return _check(name, "FAIL", "missing")
 
 
 def _dict(value: object) -> dict[str, Any]:

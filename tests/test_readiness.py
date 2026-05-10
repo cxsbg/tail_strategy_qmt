@@ -28,10 +28,12 @@ def test_build_readiness_report_can_require_live_config(tmp_path) -> None:
         require_live_config=True,
     )
     statuses = {check.name: check.status for check in result.checks}
+    details = {check.name: check.detail for check in result.checks}
 
     assert statuses["config.qmt.trader_path"] == "FAIL"
     assert statuses["config.qmt.account_id"] == "FAIL"
     assert statuses["config.capital_base"] == "FAIL"
+    assert details["config.qmt.account_id"] == "missing"
 
 
 def test_build_readiness_report_passes_recent_successful_run(tmp_path) -> None:
