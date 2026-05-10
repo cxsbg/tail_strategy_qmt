@@ -118,6 +118,41 @@ SCHEMA: tuple[str, ...] = (
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS broker_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_draft_id INTEGER,
+        decision_id INTEGER,
+        broker_order_id TEXT UNIQUE,
+        symbol TEXT NOT NULL,
+        trade_date TEXT NOT NULL,
+        side TEXT NOT NULL,
+        quantity REAL,
+        price REAL,
+        order_type TEXT,
+        status TEXT NOT NULL,
+        raw_status TEXT,
+        message TEXT,
+        strategy_version TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS broker_fills (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        broker_order_id TEXT,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL,
+        fill_date TEXT,
+        fill_time TEXT,
+        quantity REAL NOT NULL,
+        price REAL NOT NULL,
+        amount REAL,
+        fee REAL,
+        created_at TEXT
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS data_sync_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT NOT NULL,

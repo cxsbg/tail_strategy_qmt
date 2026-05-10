@@ -108,6 +108,8 @@ def _validate_sqlite(*, sqlite_path: Path, trade_date: str) -> list[ValidationCh
         "decision_applications",
         "order_drafts",
         "pre_trade_checks",
+        "broker_orders",
+        "broker_fills",
         "data_sync_status",
     }
     try:

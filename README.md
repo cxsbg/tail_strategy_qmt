@@ -324,6 +324,19 @@ outputs/pre_trade_report.md
 python -m scripts.run_pre_trade --date 20260508 --no-submit
 ```
 
+## QMT 交易接口边界
+
+真实自动委托的接口边界已经隔离在 `src/qmt/`，包括下单、撤单、查询委托、查询成交和查询持仓的协议模型，以及 `XtQuantTraderAdapter`。它会延迟导入 `xtquant`，没有 QMT 环境时不会影响普通测试。
+
+委托和成交回写会落到 SQLite：
+
+```text
+broker_orders
+broker_fills
+```
+
+当前版本先提供接口边界和落库结构，`paper` 提交仍是默认模式；下一步才会把 `READY` 订单真正接到 QMT live 提交器。
+
 ## 应用决策到本地持仓
 
 确认 `decisions` 没问题后，可以把指定日期的决策应用到本地持仓状态机：
@@ -425,6 +438,8 @@ outputs/pipeline_validation.md
 - `src/storage/parquet.py`：Parquet 路径、字段校验和读写接口。
 - `src/qmt/client.py`：QMT 数据客户端协议。
 - `src/qmt/xtquant_adapter.py`：xtquant 适配器，延迟导入，避免污染非 QMT 环境。
+- `src/qmt/trader.py`：QMT 交易协议、订单、成交和持仓快照模型。
+- `src/qmt/xtquant_trader_adapter.py`：真实 xtquant 交易适配器边界。
 - `src/data_layer/sync.py`：历史数据同步编排骨架。
 - `src/data_layer/universe.py`：股票池构建与基础代码过滤。
 - `scripts/build_universe.py`：从 QMT 板块生成本地股票池文件。
@@ -447,6 +462,7 @@ outputs/pipeline_validation.md
 - `src/strategy/decisions.py`：基础风控决策构建和决策 SQLite 仓储。
 - `src/strategy/apply_decisions.py`：决策应用、幂等记录和持仓状态机衔接。
 - `src/trading/pre_trade.py`：订单草稿、自动风控闸门和 paper 提交流程。
+- `src/trading/execution.py`：券商委托和成交 SQLite 仓储。
 - `src/backtest/simple.py`：轻量决策回测引擎。
 - `src/backtest/sweep.py`：回测参数扫描和摘要报告渲染。
 - `src/validation/pipeline.py`：本地流水线产物体检。
@@ -457,4 +473,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议接入真实 QMT 委托适配器，并把 paper submitted 状态替换为真实委托回报状态。
+下一步建议实现 live 提交器，把 `PAPER_SUBMITTED` 流程切换为真实 QMT 委托、成交回报和本地持仓回写。

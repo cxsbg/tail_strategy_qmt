@@ -1,5 +1,11 @@
 """Trading workflow package."""
 
+from trading.execution import (
+    BrokerFill,
+    BrokerOrder,
+    BrokerOrderStatus,
+    TradeExecutionRepository,
+)
 from trading.pre_trade import (
     CheckStatus,
     OrderDraft,
@@ -13,6 +19,9 @@ from trading.pre_trade import (
 )
 
 __all__ = [
+    "BrokerFill",
+    "BrokerOrder",
+    "BrokerOrderStatus",
     "CheckStatus",
     "OrderDraft",
     "OrderDraftRepository",
@@ -20,6 +29,7 @@ __all__ = [
     "OrderStatus",
     "PreTradeCheck",
     "PreTradeResult",
+    "TradeExecutionRepository",
     "render_pre_trade_markdown",
     "run_pre_trade",
 ]
