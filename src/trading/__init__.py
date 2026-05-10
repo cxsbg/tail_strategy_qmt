@@ -9,6 +9,7 @@ from trading.execution import (
     TradeExecutionRepository,
 )
 from trading.cycle import TradingCycleResult, run_trading_cycle
+from trading.deploy import WindowsTaskCommands, build_windows_task_commands
 from trading.health import (
     TradingRunHealthCheck,
     TradingRunHealthResult,
@@ -67,6 +68,8 @@ __all__ = [
     "TradingCycleRunRepository",
     "TradingRunHealthCheck",
     "TradingRunHealthResult",
+    "WindowsTaskCommands",
+    "build_windows_task_commands",
     "build_readiness_report",
     "check_trading_run_health",
     "reconcile_positions",

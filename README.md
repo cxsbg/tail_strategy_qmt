@@ -562,6 +562,24 @@ python -m scripts.run_trading_cycle_scheduled --skip-weekend --apply-positions -
 
 这个入口会在正常交易循环后自动刷新 `outputs/trading_run_monitor.md`；如果周末加了 `--skip-weekend`，会记录一条 `SKIPPED`，但不会下单。
 
+可以先复制 live 配置模板，再填 QMT 路径、资金基准和账号：
+
+```powershell
+Copy-Item config/strategy.live.example.yaml config/strategy.live.yaml
+```
+
+生成 Windows 任务计划程序命令：
+
+```powershell
+python -m scripts.print_windows_task_commands --strategy-config config/strategy.live.yaml
+```
+
+默认生成的是 `--no-submit` 演练任务。确认无误后，才生成真实提交任务：
+
+```powershell
+python -m scripts.print_windows_task_commands --strategy-config config/strategy.live.yaml --submit --apply-positions
+```
+
 任务计划程序里还可以在交易循环后追加一个健康检查步骤，让失败状态直接反映成非零退出码：
 
 ```powershell
@@ -691,4 +709,4 @@ outputs/pipeline_validation.md
 
 ## 下一阶段建议
 
-下一步建议在真实 QMT 环境先跑 `scripts.qmt_smoke_test --connect`，再做一次 `scripts.run_trading_cycle_scheduled --no-submit` 的端到端演练，最后用 `scripts.build_readiness_report --require-live-config --require-recent-run` 看还剩哪些 `WARN`。
+下一步建议在真实 QMT 环境复制 `config/strategy.live.example.yaml` 为 `config/strategy.live.yaml` 并填好账号，再跑 `scripts.qmt_smoke_test --connect` 和一次 `scripts.run_trading_cycle_scheduled --no-submit` 演练。

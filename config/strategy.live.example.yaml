@@ -1,0 +1,82 @@
+universe:
+  min_listing_days: 120
+  min_price: 3
+  min_avg_amount_20d: 100000000
+  exclude_st: true
+
+trend:
+  require_price_above_ma20: true
+  require_ma_order: true
+  max_distance_to_ma20: 0.12
+  max_return_5d: 0.20
+  max_return_20d: 0.35
+
+strength:
+  min_return_today: 0.02
+  max_return_today: 0.065
+  min_close_position: 0.75
+  max_upper_shadow_ratio: 0.35
+
+volume:
+  min_volume_ratio_5d: 1.2
+  max_volume_ratio_5d: 2.5
+  min_turnover: 0.03
+  max_turnover: 0.12
+
+breakout:
+  enable_20d_high_close: true
+  enable_5d_platform: true
+
+intraday:
+  tail_start_time: "14:30"
+  tail_confirm_time: "14:45"
+  max_tail_return_1430_1500: 0.03
+  max_tail_return_1445_1500: 0.02
+  max_tail_volume_ratio: 0.35
+
+market:
+  require_index_above_ma20: true
+  max_index_drop_today: -0.015
+
+position:
+  initial_position_ratio: 0.30
+  max_single_stock_ratio: 0.15
+  max_total_positions: 5
+  max_new_positions_per_day: 2
+
+trading:
+  mode: live
+  strategy_name: tail_strategy_qmt
+  warn_policy: block
+  max_order_position_ratio: 0.15
+  max_total_position_ratio: 0.80
+  max_open_positions: 5
+  block_if_price_limit: true
+  limit_up_pct: 0.098
+  limit_down_pct: 0.098
+  order_lot_size: 100
+  order_value_base:
+  account_equity: 100000
+  qmt:
+    trader_path: "C:/Program Files/国金证券QMT交易端/userdata_mini"
+    account_id: "YOUR_ACCOUNT_ID"
+    session_id: 1
+
+backtest:
+  initial_equity: 1.0
+  holding_days: 5
+  exit:
+    stop_loss_pct: 0.05
+    take_profit_pct: 0.12
+  limit:
+    enabled: true
+    limit_up_pct: 0.098
+    limit_down_pct: 0.098
+  portfolio:
+    enabled: true
+    max_gross_exposure: 1.0
+    max_concurrent_positions: 5
+  cost:
+    slippage_rate: 0.001
+    commission_rate: 0.0003
+    stamp_tax_rate: 0.0005
